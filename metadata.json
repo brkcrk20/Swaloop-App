@@ -1,0 +1,6 @@
+{
+  "name": "Swaloop",
+  "description": "Satma. Takas et. Yeniden kullan. Sürdürülebilir sosyal takas ve çevresel etki (SVS) platformu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
