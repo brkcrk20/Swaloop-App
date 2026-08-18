@@ -163,7 +163,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </span>
             <div className="flex items-center gap-0.5 text-amber-500 font-semibold text-xs shrink-0">
               <Star className="w-3 h-3 fill-current" />
-              <span>{listing.user.trustScore.toFixed(1)}</span>
+              <span>{Number(listing.user.trustScore ?? 0).toFixed(1)}</span>
             </div>
           </div>
 

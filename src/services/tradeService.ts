@@ -557,18 +557,22 @@ export const tradeService = {
     if (targetStep === 6) {
       const offer = await this.getTradeById(tradeId);
       if (offer) {
-        // NOT: impact_records tablosunun gerçek kolon adları CSV dökümünde
-        // netleşmedi (bkz. plan §5.5 madde 1 ve src/types/supabase.ts).
-        // Bu insert hata verirse kolon adları oradaki gerçek tanıma göre
-        // düzeltilmeli.
-        const impactInsert = {
+        // DÜZELTİLDİ (6. tur): src/types/supabase.ts'teki gerçek şemaya göre
+        // kolon adları `material_kg` / `waste_kg` (önceden yanlışlıkla
+        // `raw_material_kg` / `waste_reduction_kg` kullanılıyordu — bu, `as
+        // TablesInsert<'impact_records'>` cast'i tip kontrolünü bastırdığı
+        // için tsc tarafından hiç yakalanmamıştı, gerçek DB'de "column does
+        // not exist" hatası verirdi).
+        const impactInsert: TablesInsert<'impact_records'> = {
           trade_id: tradeRow.id,
           co2e_kg: offer.combinedImpact.co2eKg,
           water_liters: offer.combinedImpact.waterLiters,
           energy_kwh: offer.combinedImpact.energyKwh,
-          raw_material_kg: offer.combinedImpact.rawMaterialKg,
-          waste_reduction_kg: offer.combinedImpact.wasteReductionKg,
-        } as TablesInsert<'impact_records'>;
+          material_kg: offer.combinedImpact.rawMaterialKg,
+          waste_kg: offer.combinedImpact.wasteReductionKg,
+          reuse_count: offer.combinedImpact.reuseCount,
+          methodology_version: offer.combinedImpact.methodologyVersion,
+        };
 
         const { error: impactError } = await supabase
           .from('impact_records')

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listingService } from '../../services/listingService';
+import { listingService, uploadListingImages } from '../../services/listingService';
+import { supabase } from '../../lib/supabase';
 import { impactService } from '../../services/impactService';
 import { CATEGORIES } from '../../constants';
 import { CategoryId, ProductCondition } from '../../types';
@@ -28,10 +29,26 @@ export const CreateListingPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<CategoryId>('electronics');
   const [description, setDescription] = useState('');
-  const [images, setImages] = useState<string[]>([
-    'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=600&auto=format&fit=crop&q=80',
-  ]);
-  const [customImageUrl, setCustomImageUrl] = useState('');
+
+  // images: ekranda gösterilen önizleme URL'leri (gerçek dosya seçilirse
+  // geçici bir object URL, örnek görsel seçilirse doğrudan uzak URL).
+  // imageFiles: images ile AYNI INDEX'te — o slot gerçek bir dosyaysa
+  // File objesini tutar, örnek görselse null'dur. Yayınlarken sadece
+  // File olan slotlar Supabase Storage'a gerçekten yüklenir.
+  const [images, setImages] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<(File | null)[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Bileşen unmount olduğunda kullanılmayan object URL'leri bellekten temizle
+  useEffect(() => {
+    return () => {
+      images.forEach((img, idx) => {
+        if (imageFiles[idx]) URL.revokeObjectURL(img);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [condition, setCondition] = useState<ProductCondition>('very_good');
   const [lookingFor, setLookingFor] = useState('');
   const [deliveryOptions, setDeliveryOptions] = useState<('in_person' | 'cargo' | 'safe_point')[]>([
@@ -48,10 +65,43 @@ export const CreateListingPage: React.FC = () => {
       return;
     }
     setImages((prev) => [...prev, url]);
+    setImageFiles((prev) => [...prev, null]);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? []);
+    e.target.value = ''; // aynı dosyayı tekrar seçebilmek için input'u sıfırla
+
+    if (!selected.length) return;
+
+    const remainingSlots = 6 - images.length;
+    if (remainingSlots <= 0) {
+      showToast('Limit Aşıldı', 'En fazla 6 görsel ekleyebilirsiniz.', 'warning');
+      return;
+    }
+
+    const oversized = selected.find((f) => f.size > 5 * 1024 * 1024);
+    if (oversized) {
+      showToast('Dosya Çok Büyük', `${oversized.name} 5MB sınırını aşıyor.`, 'warning');
+    }
+
+    const validFiles = selected
+      .filter((f) => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024)
+      .slice(0, remainingSlots);
+
+    if (!validFiles.length) return;
+
+    const previews = validFiles.map((f) => URL.createObjectURL(f));
+    setImages((prev) => [...prev, ...previews]);
+    setImageFiles((prev) => [...prev, ...validFiles]);
   };
 
   const handleRemoveImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      if (imageFiles[index]) URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleToggleDelivery = (opt: 'in_person' | 'cargo' | 'safe_point') => {
@@ -65,6 +115,7 @@ export const CreateListingPage: React.FC = () => {
   };
 
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   const handlePublish = async () => {
     if (!title.trim() || !lookingFor.trim() || images.length === 0) {
@@ -74,12 +125,65 @@ export const CreateListingPage: React.FC = () => {
 
     setIsPublishing(true);
 
+    // Gerçek dosya seçilen slotları Supabase Storage'a yükle; örnek
+    // görsel seçilen slotlar (imageFiles[i] === null) olduğu gibi kalır.
+    let finalImages = images;
+    const pendingFiles = imageFiles.filter((f): f is File => f !== null);
+
+    if (pendingFiles.length > 0) {
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        setIsPublishing(false);
+        showToast(
+          'Oturum Sona Ermiş',
+          'Fotoğraf yüklemek için tekrar giriş yapmanız gerekiyor. Lütfen çıkış yapıp telefon numaranızla tekrar giriş yapın.',
+          'error'
+        );
+        return;
+      }
+
+      setIsUploadingPhotos(true);
+      const uploadResults = await uploadListingImages(currentUser.id, pendingFiles);
+      setIsUploadingPhotos(false);
+
+      let uploadIdx = 0;
+      const merged: string[] = [];
+      images.forEach((img, i) => {
+        if (imageFiles[i]) {
+          const uploadedUrl = uploadResults[uploadIdx];
+          uploadIdx++;
+          if (uploadedUrl) merged.push(uploadedUrl);
+          // uploadedUrl null ise (yükleme başarısız oldu) bu fotoğraf atlanır
+        } else {
+          merged.push(img);
+        }
+      });
+
+      const failedCount = pendingFiles.length - uploadResults.filter(Boolean).length;
+      if (failedCount > 0) {
+        showToast(
+          'Bazı Fotoğraflar Yüklenemedi',
+          `${failedCount} fotoğraf yüklenemedi, ilan geri kalan fotoğraflarla yayınlanıyor.`,
+          'warning'
+        );
+      }
+
+      if (merged.length === 0) {
+        setIsPublishing(false);
+        showToast('Hata', 'Hiçbir fotoğraf yüklenemedi. Lütfen tekrar deneyin.', 'error');
+        return;
+      }
+
+      finalImages = merged;
+    }
+
     const newListing = await listingService.createListing({
       userId: currentUser.id,
       title,
       description: description || `${title} temiz durumda, takasa uygundur.`,
       categoryId,
-      images,
+      images: finalImages,
       condition,
       lookingFor,
       deliveryOptions,
@@ -168,12 +272,25 @@ export const CreateListingPage: React.FC = () => {
                 ))}
 
                 {images.length < 6 && (
-                  <div className="relative aspect-square rounded-2xl border-2 border-dashed border-stone-300 hover:border-emerald-600 bg-stone-50 flex flex-col items-center justify-center text-center p-2 transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative aspect-square rounded-2xl border-2 border-dashed border-stone-300 hover:border-emerald-600 bg-stone-50 flex flex-col items-center justify-center text-center p-2 transition-colors cursor-pointer"
+                  >
                     <Camera className="w-6 h-6 text-stone-400 mb-1" />
                     <span className="text-[10px] font-semibold text-stone-500">Fotoğraf Ekle</span>
-                  </div>
+                  </button>
                 )}
               </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+              />
 
               {/* Sample Quick Pick Presets */}
               <div className="pt-2">
@@ -450,7 +567,13 @@ export const CreateListingPage: React.FC = () => {
               className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-base shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-60"
             >
               <Sparkles className="w-5 h-5 text-amber-300" />
-              <span>{isPublishing ? 'Yayınlanıyor...' : 'İlanı Ücretsiz Yayınla'}</span>
+              <span>
+                {isUploadingPhotos
+                  ? 'Fotoğraflar yükleniyor...'
+                  : isPublishing
+                  ? 'Yayınlanıyor...'
+                  : 'İlanı Ücretsiz Yayınla'}
+              </span>
             </button>
           </div>
         )}

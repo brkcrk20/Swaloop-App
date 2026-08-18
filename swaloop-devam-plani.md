@@ -1,16 +1,28 @@
 # Swaloop — Supabase Entegrasyonu Devam Planı
 
-> **GÜNCELLEME (bu turda, 3. tur):** İlan oluşturma her zaman hata veriyordu —
-> sebebi bulundu ve düzeltildi: **kategori id kümesi frontend ile canlı DB
-> arasında hem dilde hem içerikte uyumsuzdu.** Ayrıntılar için **§7**'ye
-> bakın. `npx tsc --noEmit` ve `npx vite build` hatasız geçti.
+> **GÜNCELLEME (bu turda, 6. tur):** Loop (döngü) sistemi mock veriden
+> gerçek Supabase sorgularına bağlandı + trade sisteminde canlıda hata
+> verecek bir kolon adı hatası (`impact_records`) bulunup düzeltildi.
+> Ayrıntılar için **§10**'a bakın.
 >
-> Ayrıca 2. tur güncellemesi (mesajlaşma, §6.1) kullanıcı tarafından canlıya
-> `supabase db push` ile başarıyla uygulandı — migration artık gerçek
-> DB'de aktif.
+> **ÖNEMLİ KISIT (hâlâ geçerli):** Bu oturumda da ağ erişimi yoktu
+> (`npm install` `403 Forbidden` ile reddedildi), bu yüzden tam proje
+> `npx tsc --noEmit` / `npx vite build` yine çalıştırılamadı — sadece
+> değişen dosyalar, node_modules olmadan izole modda `tsc` ile sözdizimi
+> açısından kontrol edildi (gerçek modül/tip hatası veremez, sadece parse
+> hatalarını yakalar). Yeni oturumda ilk iş bu tam doğrulama olmalı.
+
+> **GÜNCELLEME (5. tur):** Bir önceki turda eklenen fotoğraf
+> yükleme özelliği canlıda test edildi ve "new row violates row-level
+> security policy" hatası verdiği bildirildi. Kök sebep bulundu ve
+> düzeltildi: `uploadListingImages()` dosya yolunu oluştururken yerel
+> önbellekteki `currentUser.id` yerine artık gerçek Supabase oturumundaki
+> `auth.uid()` kullanıyor + oturum yoksa net bir hata gösteriyor.
+> Ayrıntılar ve doğrulama adımları için **§9**'a bakın.
 >
-> Bir sonraki oturumda §6'daki kalan maddelerden birine geçilebilir
-> (fotoğraf yükleme → loop → topluluk).
+> **ÖNEMLİ KISIT (hâlâ geçerli):** Bu oturumda da ağ erişimi yoktu, bu
+> yüzden `npx tsc --noEmit` / `npx vite build` yine çalıştırılamadı —
+> yeni oturumda ilk iş bu doğrulama olmalı.
 
 Bu doküman, yeni bir konuşmada Claude'a (veya başka birine) verilip kaldığı yerden
 devam edilebilmesi için hazırlandı. Yeni konuşmayı açarken bu dosyayı ve güncel
@@ -275,13 +287,10 @@ edecek — bkz. plan §5.5 madde 5'teki test listesi hâlâ geçerli):**
 ## 6. Sonraki öncelikler (takas sisteminden sonra)
 
 1. ~~Mesajlaşma~~ — ✅ **tamamlandı, bkz. §6.1.**
-2. Gerçek fotoğraf yükleme — Supabase Storage bucket açılmalı
-   (`config.toml`'da `[storage.buckets.images]` etkinleştirilmeli) ve
-   `CreateListingPage.tsx`'e gerçek dosya seçici + `supabase.storage.upload`
-   eklenmeli.
+2. ~~Gerçek fotoğraf yükleme~~ — ✅ **tamamlandı, bkz. §8.**
 3. Loop sistemi — `loopService.ts`, `loops`/`loop_participants` tablolarına
    bağlanmalı (takas sistemiyle benzer desende, daha basit çünkü FK zinciri
-   yok).
+   yok). **Bir sonraki oturumda önerilen adım budur.**
 4. Topluluk/rozet — önce badge için tablo tasarımı/migration gerekiyor.
 
 ## 7. YAPILDI — kategori (CategoryId) uyumsuzluğu düzeltildi (bu turda, 3. tur)
@@ -456,3 +465,342 @@ edecek):**
 3. Hata alınırsa önce migration'ın gerçekten push edildiğini, sonra RLS
    politikalarını kontrol edin.
 4. Test başarılıysa §6 madde 2'ye (gerçek fotoğraf yükleme) geçilebilir.
+
+## 8. YAPILDI — gerçek fotoğraf yükleme (bu turda tamamlanan kısım, 4. tur)
+
+**Sorun:** `CreateListingPage.tsx`'teki "Fotoğraf Ekle" kutusu tıklanabilir
+görünüyordu ama hiçbir şey yapmıyordu — kullanıcılar sadece 5 sabit stok
+görselinden ("Örnek Ürün Görselleri") seçim yapabiliyordu, gerçek kendi
+fotoğraflarını hiç yükleyemiyorlardı. `config.toml`'da da Storage bucket'ı
+hâlâ yorum satırındaydı.
+
+**Eklenen migration:**
+`supabase/migrations/20260818150000_create_listing_images_storage_bucket.sql`
+
+- `listing-images` adında **public** bir Storage bucket'ı açılıyor
+  (`insert into storage.buckets ... on conflict (id) do update`, yani bu
+  migration'ı tekrar çalıştırmak güvenli).
+  - `file_size_limit`: 5 MB
+  - `allowed_mime_types`: `image/jpeg`, `image/png`, `image/webp`, `image/gif`
+- `storage.objects` üzerinde 4 RLS politikası (`drop policy if exists` +
+  `create policy` kalıbıyla, migration'ı tekrar çalıştırmak güvenli olsun
+  diye — **not:** `CREATE POLICY IF NOT EXISTS` PostgreSQL'de yok, bu yüzden
+  önceki turlardaki `CREATE TABLE IF NOT EXISTS` kalıbı burada
+  kullanılamadı, bunun yerine drop+create kalıbı seçildi):
+  - Herkes (public) okuyabilir — bucket zaten public.
+  - Sadece giriş yapmış kullanıcı, **kendi klasörüne** (`{auth.uid()}/...`
+    path'ine) dosya ekleyebilir/güncelleyebilir/silebilir — path'in ilk
+    parçası `storage.foldername(name))[1]` ile `auth.uid()`'e eşit değilse
+    reddedilir.
+
+**`config.toml`** — `[storage.buckets.listing-images]` artık aktif (yerel
+geliştirme ortamı için; canlı/production tarafı yukarıdaki migration'la
+yönetiliyor).
+
+**Değiştirilen dosyalar:**
+
+- **`src/services/listingService.ts`** — yeni `export async function
+  uploadListingImages(userId, files: File[]): Promise<(string | null)[]>`
+  eklendi. Her dosyayı `{userId}/{uuid}.{uzantı}` path'ine yüklüyor, başarılı
+  olursa public URL döndürüyor. **Kritik tasarım kararı:** dönen dizi
+  `files` ile birebir aynı uzunlukta/sırada — başarısız bir yükleme
+  `null` olarak yer tutuyor (sessizce atlanmıyor), çünkü çağıran taraf
+  (`CreateListingPage`) pozisyona göre "bu slot dosya mıydı, örnek görsel
+  miydi" eşleşmesi yapıyor; sıra kayarsa yanlış görsel yanlış slota
+  eşlenebilirdi.
+- **`src/pages/listings/CreateListingPage.tsx`** — kapsamlı değişiklik:
+  - `images: string[]` artık boş başlıyor (önceden sabit bir stok görseliyle
+    geliyordu). Yeni paralel bir `imageFiles: (File | null)[]` state'i
+    eklendi — aynı index'te `images[i]` bir gerçek dosyanın önizlemesiyse
+    `imageFiles[i]` o `File` objesini tutuyor, örnek görselse `null`.
+  - "Fotoğraf Ekle" kutusu artık gerçek bir `<button>` — tıklanınca gizli
+    bir `<input type="file" multiple accept="image/*">`'ı tetikliyor
+    (`fileInputRef`).
+  - `handleFileSelect`: seçilen dosyaları doğruluyor (tip `image/*` mi,
+    5MB altında mı, kalan slot sayısı içinde mi), geçerli olanlar için
+    `URL.createObjectURL` ile anlık önizleme oluşturuyor, `images` ve
+    `imageFiles` state'lerine ekliyor. Aynı dosyayı tekrar seçebilmek için
+    her seçimden sonra `input.value` sıfırlanıyor.
+  - `handleRemoveImage`: kaldırılan slot gerçek bir dosyaysa
+    `URL.revokeObjectURL` ile bellek temizliyor.
+  - Component unmount olduğunda kalan tüm object URL'ler temizleniyor
+    (`useEffect` cleanup).
+  - `handlePublish`: yayınlamadan önce `imageFiles` içindeki gerçek
+    `File`'ları `uploadListingImages(currentUser.id, pendingFiles)` ile
+    Storage'a yüklüyor, dönen URL'leri pozisyona göre `images` dizisiyle
+    birleştirip (`finalImages`) `listingService.createListing`'e onu
+    gönderiyor. Bazı dosyalar yüklenemezse kullanıcıya toast ile bildiriyor
+    ama yayınlamaya devam ediyor (hiçbiri yüklenemezse hata verip
+    durduruyor). Buton metni yükleme sırasında "Fotoğraflar
+    yükleniyor..." gösteriyor (`isUploadingPhotos` state'i).
+  - Kullanılmayan `customImageUrl` state'i (hiçbir yerde render edilmiyordu,
+    ölü kod) temizlendi.
+  - "Örnek Ürün Görselleri" (5 sabit stok görseli) **kasıtlı olarak
+    korundu** — gerçek fotoğraf çekmeden hızlı test/demo yapmak isteyenler
+    için bir alternatif olarak duruyor, artık gerçek yüklemeyle birlikte
+    aynı `images` dizisinde karışık kullanılabiliyor.
+
+**Yapılan mimari kararlar (yeni oturumda hatırlanması gereken):**
+
+1. Bucket **public** yapıldı (private + signed URL değil) — çünkü
+   `listing_images.storage_path` kolonu ve `mapListing()` fonksiyonu
+   şimdiden düz bir URL string'i bekliyor ve `<img src={url}>` olarak
+   doğrudan kullanıyor (bkz. mevcut sabit Unsplash URL'leri). Bucket
+   private olsaydı her okumada ayrıca signed URL üretmek gerekirdi — bu,
+   mevcut mimariyle uyumsuz, daha büyük bir değişiklik olurdu. İlerde
+   gizlilik gerekirse (örn. sadece eşleşen taraflar görsün) bu karar
+   gözden geçirilebilir.
+2. Dosya yolu deseni `{auth.uid()}/{uuid}.{ext}` seçildi (klasör = kullanıcı
+   id'si) çünkü RLS politikaları `storage.foldername(name)[1]` ile bu
+   klasör adını `auth.uid()`'e karşı kontrol ediyor — bu, Supabase'in resmi
+   önerdiği standart desendir.
+3. Silinen ilan/fotoğraf durumunda Storage'daki dosyanın da silinmesi
+   (`listingService.deleteListing` şu an sadece DB satırını siliyor, Storage
+   objesine dokunmuyor) **bu turda kapsam dışı bırakıldı** — yeni bir
+   boşluk olarak not düşülüyor, ileride "yetim dosya" birikmesin diye ele
+   alınmalı (ör. bir Postgres trigger ile ya da `deleteListing` içine
+   `supabase.storage.from('listing-images').remove(...)` eklenerek).
+4. Avatar/profil fotoğrafı yüklemesi bu kapsamın **dışında** —
+   `CreateProfilePage.tsx` hâlâ sabit avatar döndürüyor, dokunulmadı.
+
+**Test kısıtı (bu turda her zamankinden daha ciddi — bkz. dosyanın en
+üstündeki GÜNCELLEME notu):** Bu oturumda ağ erişimi tamamen kapalıydı,
+`npm install` bile yapılamadı. Değişiklikler sadece izole `tsc` sözdizimi
+kontrolünden geçirildi (parse hatası yok) — **`tsc --noEmit` ve
+`vite build` ile tam derleme doğrulaması bu turda YAPILAMADI.**
+
+**Yeni oturumda / sizin ortamınızda ilk yapılması gereken:**
+
+1. Önce derleme kontrolü: `npm install` (eğer değişmediyse gerek yok) →
+   `npx tsc --noEmit` → `npx vite build`. Hata çıkarsa (özellikle
+   `CreateListingPage.tsx` veya `listingService.ts` içinde), bir sonraki
+   oturumda bunları paylaşın, hemen düzeltilebilir.
+2. Migration'ı canlıya uygulayın: `supabase db push` (push etmeden önce
+   `20260818150000_create_listing_images_storage_bucket.sql` dosyasını
+   gözden geçirmeniz önerilir).
+3. `npm run dev` ile uçtan uca test: "İlan Ver" akışında gerçek bir
+   fotoğraf seçin (kamera rulosundan/dosyadan) → önizleme görünmeli →
+   ilanı yayınlayın → ilan detay sayfasında fotoğrafın gerçekten
+   Supabase Storage'daki URL'den yüklendiğini doğrulayın (tarayıcı
+   devtools → Network sekmesinden `listing-images` bucket URL'sini
+   görebilirsiniz).
+4. 5MB üstü ya da desteklenmeyen bir dosya tipi (örn. `.heic`) seçerek
+   hata/uyarı mesajının doğru göründüğünü kontrol edin.
+5. Test başarılıysa §6 madde 3'e (loop sistemi) geçilebilir.
+
+## 9. HATA BULUNDU + DÜZELTİLDİ — fotoğraf yükleme "RLS policy" hatası (bu turda, 5. tur)
+
+**Bildirilen hata:** Kullanıcı gerçek bir fotoğraf seçip ilanı yayınlamaya
+çalışınca konsolda tekrar eden şu hata görüldü:
+
+```
+StorageApiError: new row violates row-level security policy
+POST .../storage/v1/object/listing-images/{uuid}/{dosya}.png 400 (Bad Request)
+```
+
+**Kök sebep:** `uploadListingImages()` dosya yolunu (`{userId}/{dosya}`)
+oluştururken, fonksiyona parametre olarak geçilen `userId` — yani
+uygulamanın **yerel/önbelleğe alınmış** `currentUser.id`'si
+(`authService.getCurrentUser()`, `localStorage`'dan okuyor) — kullanılıyordu.
+Ama Storage'daki RLS politikası isteğin **gerçek Supabase oturumundaki**
+`auth.uid()` değerine bakıyor
+(`(storage.foldername(name))[1] = auth.uid()::text`). Bu uygulamada
+`listings`/`profiles` gibi tablolarda hiç RLS olmadığı için (§2'deki
+"ÖNEMLİ EKSİK" hâlâ geçerli), bu iki kimlik arasındaki olası fark şimdiye
+kadar hiçbir yerde ortaya çıkmamıştı — fotoğraf yükleme, projede RLS'in
+fiilen devreye girdiği İLK nokta oldu ve gizli kalmış bu tutarsızlığı
+ortaya çıkardı.
+
+Bunun en olası pratik nedeni: tarayıcıdaki **yerel profil önbelleği**
+("giriş yapılmış" gibi görünüyor) ile **gerçek Supabase Auth oturumu**
+(JWT, `jwt_expiry` sonrası veya refresh token süresi dolunca sona erer)
+birbirinden BAĞIMSIZ iki mekanizma — biri sona ermiş olsa bile diğeri
+kullanıcıya hâlâ "giriş yapılmış" gösterebiliyor.
+
+**Yapılan düzeltme:**
+
+- **`src/services/listingService.ts`** — `uploadListingImages()` artık
+  dosya yolunu oluştururken parametredeki `userId` yerine
+  `supabase.auth.getUser()`'dan dönen **gerçek oturum id'sini**
+  kullanıyor. Eğer gerçek oturum yoksa (`authData.user` boşsa), fonksiyon
+  hiç yükleme denemeden erken çıkıyor ve konsola teşhis amaçlı ayrıntılı
+  bir hata yazıyor. İki id farklıysa (önbellek ≠ gerçek oturum) bu da
+  ayrıca `console.warn` ile loglanıyor — ileride benzer bir tutarsızlık
+  çıkarsa hemen fark edilsin diye.
+- **`src/pages/listings/CreateListingPage.tsx`** — `handlePublish` artık
+  yüklemeye başlamadan ÖNCE `supabase.auth.getUser()` ile oturumu
+  kontrol ediyor; oturum yoksa genel "hiçbiri yüklenemedi" mesajı yerine
+  net bir **"Oturum Sona Ermiş, tekrar giriş yapın"** toast'ı gösteriyor
+  ve gereksiz başarısız ağ isteklerini (400'ler) baştan engelliyor.
+
+**Bu düzeltme sorunu ÇÖZMÜŞ OLABİLİR ama iki farklı ihtimal var, ayırt
+edilmesi gerekiyor:**
+
+1. **Gerçekten oturum/id tutarsızlığıydı** → yukarıdaki kod düzeltmesi
+   sorunu çözer, bir sonraki denemede fotoğraf yüklenmeli.
+2. **Migration hiç canlıya push edilmemiş olabilir** ya da politika farklı
+   bir sebeple eksik/yanlış kurulmuş olabilir — bu durumda yukarıdaki kod
+   düzeltmesi yardımcı olmaz, önce migration'ın gerçekten uygulandığı
+   doğrulanmalı.
+
+**Yeni oturumda / sizin ortamınızda ilk yapılması gereken (sırasıyla):**
+
+1. Önce migration'ın canlıya işlenip işlenmediğini doğrulayın —
+   Supabase Studio → SQL Editor'de şunu çalıştırın:
+   ```sql
+   select id, public, file_size_limit, allowed_mime_types
+   from storage.buckets where id = 'listing-images';
+
+   select policyname, cmd, roles
+   from pg_policies
+   where schemaname = 'storage' and tablename = 'objects'
+     and policyname like 'listing_images%';
+   ```
+   Bucket satırı ve 4 policy (select/insert/update/delete) görünmüyorsa,
+   migration hiç push edilmemiş demektir → `supabase db push` çalıştırın.
+2. Bucket + policy'ler doğruysa, tarayıcıda tekrar fotoğraf yükleyip
+   yayınlamayı deneyin. Artık ya başarılı olmalı, ya da (oturum gerçekten
+   sona ermişse) net bir "Oturum Sona Ermiş" mesajı görmelisiniz —
+   bu durumda çıkış yapıp telefon+OTP ile tekrar giriş yapın, sonra tekrar
+   deneyin.
+3. Hâlâ aynı "row-level security policy" hatası alırsanız (oturum kontrolü
+   geçtiği hâlde), bir sonraki oturumda şunu paylaşın: tarayıcı DevTools →
+   Network sekmesinde başarısız POST isteğinin **Request Headers**
+   kısmındaki `Authorization: Bearer ...` JWT'sini (jwt.io'da decode edip
+   `sub` ve `role` claim'lerini paylaşmanız yeterli, tam token'ı
+   paylaşmanıza gerek yok) — bu, id uyuşmazlığının tam olarak nerede
+   olduğunu kesin olarak gösterir.
+
+**Test kısıtı:** Bu turda da ağ erişimi yoktu, değişiklikler yalnızca
+izole `tsc` sözdizimi kontrolünden geçirildi (parse hatası yok). Gerçek
+ortamda `npx tsc --noEmit` + `npx vite build` ile doğrulama hâlâ
+gerekiyor.
+
+## 10. YAPILDI — Loop (döngü) sistemi gerçek veriye bağlandı + trade hata düzeltmesi (bu turda, 6. tur)
+
+### 10.1 Bulunan ve düzeltilen hata: `impact_records` kolon adları yanlıştı
+
+§5.6 madde 5'te "kolon adları tahmin edildi, test edilmedi" diye not
+düşülmüştü. Bu turda `src/types/supabase.ts`'teki gerçek şema tekrar
+incelendi: gerçek kolon adları `material_kg` ve `waste_kg` imiş, ama
+`tradeService.ts` `raw_material_kg` ve `waste_reduction_kg` yazıyordu.
+`as TablesInsert<'impact_records'>` cast'i bu hatayı `tsc`'den
+gizlemişti (cast, tip kontrolünü bastırıyor). **Düzeltildi** —
+`src/services/tradeService.ts` içindeki `advanceTradeStep`, artık
+doğru kolon adlarını kullanıyor ve cast yerine gerçek
+`TablesInsert<'impact_records'>` tipiyle yazıldı (bir daha aynı hatayı
+tsc yakalasın diye). Ayrıca eksik olan `reuse_count` ve
+`methodology_version` alanları da insert'e eklendi.
+
+**Bu, takas sisteminin adım 6'sını (döngü tamamlama/impact kaydı)
+canlıda ilk kez test ederken daha önce mutlaka alınacak bir hatayı
+önden düzeltti.** Yine de gerçek Supabase'e karşı test edilmedi (ağ
+erişimi yok) — bir sonraki uçtan uca testte doğrulanmalı.
+
+### 10.2 Loop sistemi — DB şeması ile frontend modeli arasındaki fark
+
+Canlı `loops`/`loop_participants` tabloları (§3'teki 16 tablodan ikisi)
+çok sadeydi: `loops` sadece `creator_id/title/description/
+max_participants/status`, `loop_participants` sadece
+`loop_id/user_id/role/status/joined_at` tutuyordu — **hangi katılımcının
+hangi ilanı döngüye soktuğu hiç saklanmıyordu**, frontend'in
+`LoopParticipant.offeringListing` alanı için karşılık yoktu.
+
+**Eklenen migration:**
+`supabase/migrations/20260818160000_extend_loops_for_listings.sql`
+- `loops.category` (text, `not null default 'other'`) eklendi.
+- `loop_participants.offering_listing_id` (uuid, `listings.id`'ye FK,
+  nullable) eklendi.
+
+**Mimari karar (trade sistemindeki §5.2 kararıyla aynı desen):**
+`LoopParticipant`'ın `givesToUserId`/`receivesFromUserId`/
+`receivingListing` alanları için DB'de AYRI KOLON AÇILMADI. Döngü
+dairesel olduğu için bu bilgi, katılımcıların `joined_at` sırasına göre
+**istemci tarafında** hesaplanıyor: i. katılımcı her zaman (i+1).
+katılımcıya verir, (i-1). katılımcıdan alır. Bu yaklaşım basit ve doğru
+ama **kırılgan bir varsayıma dayanıyor: katılımcı sırası hiç
+değişmemeli.** Eğer ileride "bir katılımcı döngüden ayrılabilir" gibi bir
+özellik eklenirse, zincir yeniden hesaplanmalı — bu senaryo bu turda ele
+alınmadı.
+
+`loops.status` ve `loop_participants.status` DB'de düz `text` ve eski
+default'ları (`'active'`) frontend'in beklediği union değerleriyle
+uyuşmuyordu — kod tarafında `normalizeLoopStatus`/
+`normalizeParticipantStatus` fonksiyonlarıyla güvenli varsayılana
+(`matching`/`pending`) düşülüyor, ama migration'daki eski `default
+'active'` bilerek DOKUNULMADAN bırakıldı (var olan satırları bozmamak
+için — şu an muhtemelen hiç satır yok ama garanti değil).
+
+### 10.3 Değiştirilen/yeniden yazılan dosyalar
+
+- **`src/types/supabase.ts`** — `loops` ve `loop_participants` tipleri
+  yeni kolonlarla (elle) güncellendi.
+- **`src/services/loopService.ts`** — tamamen yeniden yazıldı. Artık
+  `INITIAL_LOOPS` mock verisi yerine gerçek sorgular kullanıyor. Tüm
+  metodlar `async`:
+  - `getLoops()` / `getLoopById(id)` — `loops` + `loop_participants`
+    (join: `user:profiles`, `listing:listings(*, user:profiles(*),
+    images:listing_images(...))`), zincir istemci tarafında hesaplanıyor,
+    `totalImpact` `impactService.calculateCombinedTradeImpact` ile
+    katılımcıların `offeringListing.estimatedImpact` toplamından
+    üretiliyor (trade sistemindeki `combinedImpact` ile birebir aynı
+    fonksiyon tekrar kullanıldı).
+  - `confirmParticipantStep(loopId, userId)` — katılımcı durumunu
+    `confirmed` yapıyor, tüm katılımcılar onaylandıysa döngüyü
+    `in_delivery`'e çeviriyor (önceki senkron mock mantığıyla birebir
+    aynı iş kuralı, artık DB'ye yazıyor).
+  - `completeLoop(loopId)` — döngüyü ve tüm katılımcıları `completed`
+    yapıyor.
+  - **Yeni metodlar (henüz hiçbir UI çağırmıyor, ileride "döngü
+    oluştur"/"döngüye katıl" akışı için hazır):** `createLoop(...)`,
+    `joinLoop(loopId, userId, listingId)` — döngü dolunca (katılımcı
+    sayısı `max_participants`'a ulaşınca) otomatik `locked`'a çeviriyor.
+- **`src/pages/loops/LoopsPage.tsx`** — "Döngüler" sekmesi (diğer iki
+  sekme — Gizemli Kutu, Takas Yolculuğu — tamamen mock ve bu turda
+  **dokunulmadı**, plan §5.3'teki notla aynı şekilde kapsam dışı)
+  async akışa çevrildi: `useEffect` içinde `loopService.getLoops()` ile
+  yükleniyor, yükleniyor/boş durum ekranları eklendi, onay butonu
+  `isConfirming` state'iyle yükleme sırasında devre dışı bırakılıyor ve
+  metni değişiyor.
+- **`src/services/tradeService.ts`** — bkz. §10.1 (impact_records
+  düzeltmesi, loop sistemiyle ilgisiz ama aynı turda yapıldı).
+
+### 10.4 Kapsam dışı bırakılanlar (bilerek)
+
+1. **"Döngü oluştur" / "döngüye katıl" UI'ı yok** — `loopService`'te
+   `createLoop`/`joinLoop` metodları hazır ama `LoopsPage.tsx`'te bunları
+   çağıran bir buton/form eklenmedi (mevcut sayfa zaten sadece var olan
+   döngüleri gösteriyordu, "yeni döngü başlat" akışı hiç yoktu — bu, kod
+   entegrasyonunun ötesinde bir ürün/UI tasarım kararı gerektiriyor).
+2. Gizemli Kutu ve Takas Yolculuğu (Paperclip) sekmeleri hâlâ tamamen
+   mock — plan §4'teki "Loop sistemi" maddesi sadece 3'lü döngü
+   (`INITIAL_LOOPS`) kısmını kapsıyordu, bu ikisi ayrı bir iş.
+3. Bir katılımcının döngüden ayrılması/döngünün iptali için özel bir
+   metod eklenmedi (`loops.status = 'cancelled'` union'da var ama
+   yazan kod yok).
+
+**Test kısıtı:** Ağ erişimi olmadığı için bu turda da gerçek
+`npm install` + `npx tsc --noEmit` + `npx vite build` çalıştırılamadı.
+Değişen dosyalar node_modules olmadan izole `tsc` ile sözdizimi
+açısından kontrol edildi (gerçek tip/modül hatası veremez, sadece parse
+hatalarını yakalar) — temiz çıktı.
+
+**Yeni oturumda / sizin ortamınızda ilk yapılması gereken:**
+
+1. Önce tam derleme kontrolü: `npm install` → `npx tsc --noEmit` →
+   `npx vite build`. Özellikle `loopService.ts` ve `tradeService.ts`'i
+   kontrol edin; hata çıkarsa bir sonraki oturumda paylaşın.
+2. Migration'ı canlıya uygulayın: `supabase db push` (önce
+   `20260818160000_extend_loops_for_listings.sql` dosyasını gözden
+   geçirin).
+3. Test için: Supabase Studio'dan elle 1 `loops` satırı + en az 2
+   `loop_participants` satırı (her birine gerçek bir `listings.id`
+   `offering_listing_id` olarak) ekleyin (henüz UI'dan döngü
+   oluşturulamıyor, bkz. §10.4 madde 1) → `npm run dev` ile "Döngüler"
+   sekmesinin açılıp dairesel akışı doğru gösterdiğini, onay butonunun
+   çalıştığını kontrol edin.
+4. Trade sistemindeki `impact_records` düzeltmesini de bu fırsatta test
+   edin: bir takası adım 6'ya (tamamlanma) kadar ilerletin, konsolda
+   "Etki kaydı oluşturulamadı" hatası görünmemeli.
+5. Test başarılıysa, `createLoop`/`joinLoop` için bir UI eklenmesi ya da
+   plan §6 madde 4'teki (topluluk/rozet) işe geçilmesi düşünülebilir.

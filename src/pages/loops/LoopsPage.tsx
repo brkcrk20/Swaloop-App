@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { loopService } from '../../services/loopService';
@@ -24,15 +24,39 @@ export const LoopsPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'loops' | 'mystery' | 'paperclip'>('loops');
-  const [loops, setLoops] = useState<Loop[]>(() => loopService.getLoops());
-  const [selectedLoop, setSelectedLoop] = useState<Loop | undefined>(loops[0]);
+  const [loops, setLoops] = useState<Loop[]>([]);
+  const [selectedLoop, setSelectedLoop] = useState<Loop | undefined>(undefined);
+  const [isLoadingLoops, setIsLoadingLoops] = useState(true);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  const handleConfirmStep = (loopId: string) => {
-    const updated = loopService.confirmParticipantStep(loopId, currentUser.id);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setIsLoadingLoops(true);
+      const data = await loopService.getLoops();
+      if (cancelled) return;
+      setLoops(data);
+      setSelectedLoop((prev) => data.find((l) => l.id === prev?.id) ?? data[0]);
+      setIsLoadingLoops(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleConfirmStep = async (loopId: string) => {
+    setIsConfirming(true);
+    const updated = await loopService.confirmParticipantStep(loopId, currentUser.id);
+    setIsConfirming(false);
     if (updated) {
-      setLoops(loopService.getLoops());
-      setSelectedLoop({ ...updated });
+      const refreshed = await loopService.getLoops();
+      setLoops(refreshed);
+      setSelectedLoop(updated);
       showToast('Döngü Adımınız Onaylandı!', 'Tüm katılımcılar onayladığında teslimat başlayacaktır.', 'success');
+    } else {
+      showToast('Bir Şeyler Ters Gitti', 'Döngü adımınız onaylanamadı, lütfen tekrar deneyin.', 'error');
     }
   };
 
@@ -90,7 +114,17 @@ export const LoopsPage: React.FC = () => {
         </div>
 
         {/* 1. Multi-Party Loops Tab */}
-        {activeTab === 'loops' && selectedLoop && (
+        {activeTab === 'loops' && isLoadingLoops && (
+          <div className="py-16 text-center text-xs text-stone-500">Döngüler yükleniyor...</div>
+        )}
+
+        {activeTab === 'loops' && !isLoadingLoops && !selectedLoop && (
+          <div className="py-16 text-center text-xs text-stone-500">
+            Şu anda aktif bir döngü yok.
+          </div>
+        )}
+
+        {activeTab === 'loops' && !isLoadingLoops && selectedLoop && (
           <div className="space-y-4">
             {/* Active Loop Visualizer Card */}
             <div className="bg-white rounded-3xl border border-stone-200/90 p-5 shadow-xs space-y-4">
@@ -185,11 +219,12 @@ export const LoopsPage: React.FC = () => {
               {/* Loop Action */}
               <button
                 type="button"
+                disabled={isConfirming}
                 onClick={() => handleConfirmStep(selectedLoop.id)}
-                className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Döngü Katılımımı ve Eşyamı Onayla</span>
+                <span>{isConfirming ? 'Onaylanıyor...' : 'Döngü Katılımımı ve Eşyamı Onayla'}</span>
               </button>
             </div>
           </div>

@@ -11,6 +11,95 @@ import type { TablesUpdate } from '../types/supabase';
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1523275335684-37898b6bafeb?w=800&auto=format&fit=crop&q=80';
 
+const LISTING_IMAGES_BUCKET = 'listing-images';
+
+/**
+ * Kullanıcının seçtiği gerçek fotoğrafları Supabase Storage'a yükler ve
+ * herkese açık (public) URL'lerini döndürür. Bucket ve RLS politikaları
+ * için bkz. supabase/migrations/20260818150000_create_listing_images_storage_bucket.sql
+ *
+ * ÖNEMLİ: Dosya yolu (`{ownerId}/{dosya}`) RLS politikasının
+ * `(storage.foldername(name))[1] = auth.uid()::text` kontrolüyle
+ * eşleşmek ZORUNDA. Bu yüzden `userId` parametresi yerine, isteği
+ * gerçekten yapacak olan Supabase oturumundaki `auth.uid()` kullanılıyor
+ * (`supabase.auth.getUser()`). Eğer bu ikisi (uygulamanın yerel
+ * `currentUser.id`'si ile gerçek oturum kullanıcısı) farklıysa, ya da
+ * hiç aktif oturum yoksa (süresi dolmuş / hiç giriş yapılmamış), yükleme
+ * "new row violates row-level security policy" hatasıyla reddedilir —
+ * bu artık konsola net bir teşhis mesajıyla loglanıyor.
+ *
+ * Dönen dizi, `files` ile AYNI SIRA ve AYNI UZUNLUKTADIR — bir dosya
+ * yüklenemezse o index'te `null` döner (çağıran taraf pozisyona göre
+ * eşleştirme yapabilsin diye; array.filter ile sessizce atlarsak sıra
+ * kayar ve yanlış görsel yanlış slota eşlenebilir).
+ */
+export async function uploadListingImages(
+  userId: string,
+  files: File[]
+): Promise<(string | null)[]> {
+  if (!files.length) return [];
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    console.error(
+      'Fotoğraf yüklenemedi: geçerli bir Supabase oturumu bulunamadı. ' +
+        'Kullanıcı arayüzde "giriş yapılmış" görünse bile, gerçek Supabase ' +
+        'oturumu sona ermiş olabilir (localStorage önbelleği ile Supabase ' +
+        'auth session farklı şeylerdir). Çözüm: kullanıcının tekrar giriş ' +
+        '(telefon+OTP) yapması gerekiyor.',
+      authError
+    );
+    return files.map(() => null);
+  }
+
+  if (authData.user.id !== userId) {
+    console.warn(
+      'Uyarı: uygulamanın önbellekteki currentUser.id değeri ile gerçek ' +
+        'Supabase oturum kullanıcı id\'si FARKLI. RLS kontrolü oturumdaki ' +
+        'id\'ye göre yapılacağı için yükleme buna göre devam ediyor.',
+      { sessionUserId: authData.user.id, cachedUserId: userId }
+    );
+  }
+
+  // RLS foldername kontrolü auth.uid()'e göre çalıştığı için, path'te
+  // parametre olarak gelen userId değil, gerçek oturum id'si kullanılır.
+  const ownerId = authData.user.id;
+
+  const results: (string | null)[] = [];
+
+  for (const file of files) {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const randomId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const path = `${ownerId}/${randomId}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(LISTING_IMAGES_BUCKET)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Fotoğraf yüklenemedi:', file.name, uploadError);
+      results.push(null);
+      continue;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(LISTING_IMAGES_BUCKET).getPublicUrl(path);
+
+    results.push(publicUrl);
+  }
+
+  return results;
+}
+
 async function getCategoryUuid(
   categoryId: CategoryId | string
 ): Promise<string | null> {
@@ -40,6 +129,9 @@ async function getCategorySlug(
   return data?.slug ?? categoryUuid;
 }
 
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+
 function mapListing(row: any): Listing {
   const categoryId = row.category_slug ?? row.category_id;
 
@@ -49,52 +141,39 @@ function mapListing(row: any): Listing {
       row.condition as ListingCondition
     );
 
+  // row.user, Supabase join'inden (`user:profiles(*)`) gelen HAM profil
+  // satırıdır (snake_case: full_name, avatar_url...) — Listing['user']
+  // tipinin beklediği camelCase şekille birebir aynı DEĞİLDİR. Önceden
+  // bu ham satır doğrudan atanıyordu ve `trustScore` alanı hiç var
+  // olmadığı için ProductCard'da `.toFixed(1)` çağrısı patlıyordu.
+  // Burada doğru şekilde eşleniyor; güven puanı enrichListings'te
+  // ayrıca hesaplanıp `row.owner_trust_score` olarak taşınıyor.
+  const mappedUser = row.user
+    ? {
+        id: row.user.id ?? row.owner_id,
+        fullName: row.user.full_name ?? 'Swaloop Kullanıcısı',
+        avatarUrl: row.user.avatar_url || DEFAULT_AVATAR,
+        trustScore: row.owner_trust_score ?? 5,
+        city: row.user.city ?? '',
+        district: row.user.district ?? '',
+        isVerified: true,
+      }
+    : {
+        id: row.owner_id,
+        fullName: 'Swaloop Kullanıcısı',
+        avatarUrl: DEFAULT_AVATAR,
+        trustScore: row.owner_trust_score ?? 5,
+        city: row.city ?? '',
+        district: row.district ?? '',
+        isVerified: false,
+      };
+
   return {
     id: row.id,
 
     userId: row.owner_id,
 
-    user: row.user ?? {
-      id: row.owner_id,
-      fullName: 'Swaloop Kullanıcısı',
-      phone: '',
-      avatarUrl: '',
-      city: row.city ?? '',
-      district: row.district ?? '',
-      memberSince: '',
-      interests: [],
-      wantedCategories: [],
-      isVerified: false,
-
-      trustProfile: {
-        score: 5,
-        level: 'Başlangıç',
-        phoneVerified: false,
-        idVerified: false,
-        successfulTradesCount: 0,
-        cancellationRate: 0,
-        responseRate: 1,
-        averageRating: 5,
-        reviewCount: 0,
-        reportCount: 0,
-        accountAgeDays: 0,
-        positiveHighlights: [],
-      },
-
-      stats: {
-        totalTrades: 0,
-        activeListings: 0,
-        completedLoops: 0,
-        totalCo2Prevented: 0,
-        totalWaterSaved: 0,
-        totalEnergySaved: 0,
-        totalRawMaterialsSaved: 0,
-        totalItemsReused: 0,
-        responseRatePercent: 100,
-        avgResponseTimeMinutes: 0,
-        cancellationRatePercent: 0,
-      },
-    },
+    user: mappedUser,
 
     title: row.title ?? '',
     description: row.description ?? '',
@@ -163,10 +242,36 @@ export async function enrichListings(rows: any[]): Promise<Listing[]> {
     }
   }
 
+  // İlan sahiplerinin gerçek güven puanını (trust_profiles.trust_score)
+  // topluca çekiyoruz. Önceden bu hiç yapılmıyordu ve ProductCard'ın
+  // beklediği `user.trustScore` alanı DB'den gelen ham `profiles` satırında
+  // hiç yoktu (yalnızca `trust_profiles` tablosunda tutuluyor) — bu da
+  // "Cannot read properties of undefined (reading 'toFixed')" hatasına
+  // yol açıyordu. Skor bulunamazsa 5 (varsayılan başlangıç puanı) kullanılır.
+  const ownerIds = [
+    ...new Set(rows.map((row) => row.owner_id).filter(Boolean)),
+  ];
+
+  let trustScoreMap = new Map<string, number>();
+
+  if (ownerIds.length) {
+    const { data: trustRows } = await supabase
+      .from('trust_profiles')
+      .select('user_id, trust_score')
+      .in('user_id', ownerIds);
+
+    for (const t of trustRows ?? []) {
+      if (t.user_id != null && t.trust_score != null) {
+        trustScoreMap.set(t.user_id, t.trust_score);
+      }
+    }
+  }
+
   return rows.map((row) => ({
     ...row,
     category_slug:
       categoryMap.get(row.category_id) ?? row.category_id,
+    owner_trust_score: trustScoreMap.get(row.owner_id) ?? 5,
   })).map(mapListing);
 }
 

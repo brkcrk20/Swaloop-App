@@ -329,6 +329,7 @@ export type Database = {
           id: string
           joined_at: string
           loop_id: string
+          offering_listing_id: string | null
           role: string
           status: string
           user_id: string
@@ -337,6 +338,7 @@ export type Database = {
           id?: string
           joined_at?: string
           loop_id: string
+          offering_listing_id?: string | null
           role?: string
           status?: string
           user_id: string
@@ -345,6 +347,7 @@ export type Database = {
           id?: string
           joined_at?: string
           loop_id?: string
+          offering_listing_id?: string | null
           role?: string
           status?: string
           user_id?: string
@@ -357,10 +360,18 @@ export type Database = {
             referencedRelation: "loops"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loop_participants_offering_listing_id_fkey"
+            columns: ["offering_listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
         ]
       }
       loops: {
         Row: {
+          category: string
           created_at: string
           creator_id: string
           description: string | null
@@ -371,6 +382,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           creator_id: string
           description?: string | null
@@ -381,6 +393,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           creator_id?: string
           description?: string | null
