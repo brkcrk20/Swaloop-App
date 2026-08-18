@@ -1,6 +1,11 @@
 # Swaloop — Supabase Entegrasyonu Devam Planı
 
-> **GÜNCELLEME (bu turda, 6. tur):** Loop (döngü) sistemi mock veriden
+> **GÜNCELLEME (bu turda, 7. tur):** Topluluk gönderileri (community
+> posts) gerçek Supabase'e bağlandı — beğeni sayısı DB trigger'ıyla
+> tutuluyor. Etkinlikler ve rozetler HÂLÂ mock (bkz. §11). Ayrıntı için
+> **§11**'e bakın.
+
+> **GÜNCELLEME (6. tur):** Loop (döngü) sistemi mock veriden
 > gerçek Supabase sorgularına bağlandı + trade sisteminde canlıda hata
 > verecek bir kolon adı hatası (`impact_records`) bulunup düzeltildi.
 > Ayrıntılar için **§10**'a bakın.

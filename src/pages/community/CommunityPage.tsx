@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { communityService } from '../../services/communityService';
@@ -22,13 +22,31 @@ export const CommunityPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'stories' | 'events' | 'leaderboard'>('stories');
-  const [posts, setPosts] = useState<CommunityPost[]>(() => communityService.getPosts());
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [events, setEvents] = useState<CommunityEvent[]>(() => communityService.getEvents());
 
-  const handleLikePost = (postId: string) => {
-    const updated = communityService.likePost(postId);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setIsLoadingPosts(true);
+      const data = await communityService.getPosts(currentUser.id);
+      if (!cancelled) {
+        setPosts(data);
+        setIsLoadingPosts(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser.id]);
+
+  const handleLikePost = async (postId: string) => {
+    const updated = await communityService.toggleLikePost(postId, currentUser.id);
     if (updated) {
-      setPosts(posts.map((p) => (p.id === postId ? updated : p)));
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
     }
   };
 
@@ -100,7 +118,15 @@ export const CommunityPage: React.FC = () => {
         </div>
 
         {/* 1. Stories Tab */}
-        {activeTab === 'stories' && (
+        {activeTab === 'stories' && isLoadingPosts && (
+          <div className="py-16 text-center text-xs text-stone-500">Gönderiler yükleniyor...</div>
+        )}
+
+        {activeTab === 'stories' && !isLoadingPosts && posts.length === 0 && (
+          <div className="py-16 text-center text-xs text-stone-500">Henüz hiç gönderi yok.</div>
+        )}
+
+        {activeTab === 'stories' && !isLoadingPosts && posts.length > 0 && (
           <div className="space-y-4">
             {posts.map((post) => (
               <div
