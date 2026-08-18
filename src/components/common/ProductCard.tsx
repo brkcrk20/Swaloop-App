@@ -19,9 +19,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const navigate = useNavigate();
   const { showToast, language, t } = useApp();
 
-  const handleToggleFavorite = (e: React.MouseEvent) => {
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const isFav = listingService.toggleFavorite(listing.id);
+    const isFav = await listingService.toggleFavorite(listing.id);
     showToast(
       isFav
         ? (language === 'en' ? 'Added to Favorites' : 'Favorilere Eklendi')

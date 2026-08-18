@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listingService } from '../../services/listingService';
 import { ProductCard } from '../../components/common/ProductCard';
+import { Listing } from '../../types';
 import { ArrowLeft, Heart, Sparkles } from 'lucide-react';
 
 export const FavoritesPage: React.FC = () => {
   const navigate = useNavigate();
-  const favoriteListings = listingService.getFavorites();
+  const [favoriteListings, setFavoriteListings] = useState<Listing[]>([]);
+
+  useEffect(() => {
+    listingService.getFavorites().then(setFavoriteListings);
+  }, []);
 
   return (
     <div className="min-h-screen bg-stone-50 pb-24 text-stone-900">

@@ -52,7 +52,7 @@ export interface UserProfile {
 
 export interface TrustProfile {
   score: number; // 0.00 to 5.00
-  level: 'Başlangıç' | 'Güvenilir' | 'Çok Güvenilir' | 'Topluluk Lideri';
+  level: 'Başlangıç' | 'Güvenilir' | 'Çok Güvenilir' | 'Topluluk Lideri' | 'Güvenilir Üye' | 'Doğrulanmış Üye';
   phoneVerified: boolean;
   idVerified: boolean;
   successfulTradesCount: number;

@@ -1,6 +1,7 @@
-import { UserProfile, CategoryId } from '../types';
+import { UserProfile, CategoryId, TrustProfile } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import type { TablesUpdate } from '../types/supabase';
 
 const AUTH_STORAGE_KEY = 'swaloop_auth_user';
 const ONBOARDING_COMPLETED_KEY = 'swaloop_onboarding_done';
@@ -40,7 +41,39 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-function mapProfile(row: any): UserProfile {
+// public.trust_profiles satırı, her profile INSERT'inde DB tetikleyicisi
+// (create_trust_profile) tarafından otomatik oluşturuluyor. Önceden bu veri
+// hiç okunmuyor, her kullanıcı için sabit "score: 5" gösteriliyordu.
+async function getTrustProfileRow(userId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('trust_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Trust profile alınamadı:', error);
+    return null;
+  }
+
+  return data;
+}
+
+function trustLevelFromScore(
+  score: number
+): TrustProfile['level'] {
+  if (score >= 4.5) return 'Topluluk Lideri';
+  if (score >= 3.5) return 'Çok Güvenilir';
+  if (score >= 2.5) return 'Güvenilir';
+  return 'Başlangıç';
+}
+
+function mapProfile(row: any, trust?: any | null): UserProfile {
+  const completedTrades = trust?.completed_trades ?? 0;
+  const cancelledTrades = trust?.cancelled_trades ?? 0;
+  const totalTrades = completedTrades + cancelledTrades;
+  const score = trust?.trust_score ?? 5;
+
   return {
     id: row.id,
     phone: formatPhone(row.phone ?? ''),
@@ -50,6 +83,7 @@ function mapProfile(row: any): UserProfile {
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
     city: row.city ?? '',
     district: row.district ?? '',
+    bio: row.bio ?? undefined,
     memberSince: row.created_at
       ? new Date(row.created_at).toLocaleDateString('tr-TR')
       : 'Bugün',
@@ -60,13 +94,16 @@ function mapProfile(row: any): UserProfile {
     isVerified: true,
 
     trustProfile: {
-      score: 5,
-      level: 'Başlangıç',
+      score,
+      level: trustLevelFromScore(score),
       phoneVerified: true,
-      idVerified: false,
-      successfulTradesCount: 0,
-      cancellationRate: 0,
-      responseRate: 1,
+      idVerified: trust?.verification_level === 'id_verified',
+      successfulTradesCount: completedTrades,
+      cancellationRate:
+        totalTrades > 0 ? cancelledTrades / totalTrades : 0,
+      responseRate: trust?.response_rate ?? 1,
+      // DB'de reviews tablosu var ama ortalama puan/adet henüz burada
+      // agregе edilmiyor; bu iki alan hâlâ placeholder.
       averageRating: 5,
       reviewCount: 0,
       reportCount: 0,
@@ -83,7 +120,7 @@ function mapProfile(row: any): UserProfile {
     },
 
     stats: {
-      totalTrades: 0,
+      totalTrades: completedTrades,
       activeListings: 0,
       completedLoops: 0,
       totalCo2Prevented: 0,
@@ -91,9 +128,12 @@ function mapProfile(row: any): UserProfile {
       totalEnergySaved: 0,
       totalRawMaterialsSaved: 0,
       totalItemsReused: 0,
-      responseRatePercent: 100,
+      responseRatePercent: Math.round((trust?.response_rate ?? 1) * 100),
       avgResponseTimeMinutes: 0,
-      cancellationRatePercent: 0,
+      cancellationRatePercent:
+        totalTrades > 0
+          ? Math.round((cancelledTrades / totalTrades) * 100)
+          : 0,
     },
   };
 }
@@ -245,7 +285,8 @@ export const authService = {
       };
     }
 
-    const user = mapProfile(profile);
+    const trust = await getTrustProfileRow(profile.id);
+    const user = mapProfile(profile, trust);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -307,7 +348,8 @@ export const authService = {
       return undefined;
     }
 
-    const newUser = mapProfile(profile);
+    const trust = await getTrustProfileRow(profile.id);
+    const newUser = mapProfile(profile, trust);
 
     newUser.interests = data.interests ?? [];
     newUser.wantedCategories = data.wantedCategories ?? [];
@@ -340,7 +382,8 @@ export const authService = {
       return null;
     }
 
-    const user = mapProfile(profile);
+    const trust = await getTrustProfileRow(profile.id);
+    const user = mapProfile(profile, trust);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -396,7 +439,7 @@ export const authService = {
       return undefined;
     }
 
-    const dbUpdates: Record<string, any> = {};
+    const dbUpdates: TablesUpdate<'profiles'> = {};
 
     if (updates.fullName !== undefined) {
       dbUpdates.full_name = updates.fullName;
@@ -414,6 +457,10 @@ export const authService = {
       dbUpdates.district = updates.district;
     }
 
+    if (updates.bio !== undefined) {
+      dbUpdates.bio = updates.bio;
+    }
+
     dbUpdates.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -428,7 +475,8 @@ export const authService = {
       return undefined;
     }
 
-    const user = mapProfile(data);
+    const trust = await getTrustProfileRow(data.id);
+    const user = mapProfile(data, trust);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,

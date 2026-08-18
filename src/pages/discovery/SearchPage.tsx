@@ -21,12 +21,26 @@ export const SearchPage: React.FC = () => {
     setQuery(queryParam);
   }, [queryParam]);
 
-  const results: Listing[] = listingService.searchListings(
-    query,
-    selectedCategory,
-    selectedCondition,
-    maxDistance
-  );
+  const [results, setResults] = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setIsLoading(true);
+
+    listingService
+      .searchListings(query, selectedCategory, selectedCondition, maxDistance)
+      .then((data) => {
+        if (!isCancelled) {
+          setResults(data);
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [query, selectedCategory, selectedCondition, maxDistance]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +205,13 @@ export const SearchPage: React.FC = () => {
             </h2>
           </div>
 
-          {results.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="aspect-[3/4] rounded-2xl bg-stone-100 animate-pulse" />
+              ))}
+            </div>
+          ) : results.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 border border-stone-200 text-center space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center mx-auto">
                 <Search className="w-7 h-7" />

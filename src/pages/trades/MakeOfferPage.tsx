@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
@@ -25,15 +25,33 @@ export const MakeOfferPage: React.FC = () => {
   const targetListingId = searchParams.get('targetId');
   const { currentUser, showToast } = useApp();
 
-  const targetListing = targetListingId
-    ? listingService.getListingById(targetListingId)
-    : listingService.getAllListings()[0];
+  const [targetListing, setTargetListing] = useState<Listing | undefined>(undefined);
+  const [isLoadingTarget, setIsLoadingTarget] = useState(true);
+  const [myListings, setMyListings] = useState<Listing[]>([]);
 
-  const myListings = listingService.getUserListings(currentUser.id).filter((l) => l.status === 'active');
+  useEffect(() => {
+    setIsLoadingTarget(true);
+    const targetPromise = targetListingId
+      ? listingService.getListingById(targetListingId)
+      : listingService.getAllListings().then((all) => all[0]);
 
-  const [selectedMyListingIds, setSelectedMyListingIds] = useState<string[]>(
-    myListings.length > 0 ? [myListings[0].id] : []
-  );
+    targetPromise.then((listing) => {
+      setTargetListing(listing);
+      setIsLoadingTarget(false);
+    });
+
+    listingService
+      .getUserListings(currentUser.id)
+      .then((all) => setMyListings(all.filter((l) => l.status === 'active')));
+  }, [targetListingId, currentUser.id]);
+
+  const [selectedMyListingIds, setSelectedMyListingIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (myListings.length > 0 && selectedMyListingIds.length === 0) {
+      setSelectedMyListingIds([myListings[0].id]);
+    }
+  }, [myListings]);
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'cargo' | 'safe_point'>('safe_point');
   const [note, setNote] = useState('');
   const [scheduledDate, setScheduledDate] = useState('2024-05-25');
@@ -41,6 +59,14 @@ export const MakeOfferPage: React.FC = () => {
     targetListing?.location?.safeMeetingPoint || 'Kadıköy İskele Meydanı - Güvenli Takas Noktası'
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (isLoadingTarget) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!targetListing) {
     return (

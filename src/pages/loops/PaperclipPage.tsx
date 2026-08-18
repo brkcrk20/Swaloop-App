@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
@@ -28,8 +28,15 @@ export const PaperclipPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
 
-  const userListings = listingService.getUserListings(currentUser.id);
-  const otherListings = listingService.getAllListings().filter((l) => l.user.id !== currentUser.id);
+  const [userListings, setUserListings] = useState<Listing[]>([]);
+  const [otherListings, setOtherListings] = useState<Listing[]>([]);
+
+  useEffect(() => {
+    listingService.getUserListings(currentUser.id).then(setUserListings);
+    listingService
+      .getAllListings()
+      .then((all) => setOtherListings(all.filter((l) => l.user.id !== currentUser.id)));
+  }, [currentUser.id]);
 
   // Target item dream goal state
   const [dreamTarget, setDreamTarget] = useState<string>('Vintage Şehir Bisikleti & Fotoğraf Makinesi');

@@ -75,7 +75,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
-  const favoritesCount = listingService.getFavorites().length;
+
+  const [favoritesCount, setFavoritesCount] = useState<number>(0);
+
+  const refreshFavoritesCount = () => {
+    listingService.getFavorites().then((favs) => setFavoritesCount(favs.length));
+  };
+
+  useEffect(() => {
+    refreshFavoritesCount();
+  }, []);
 
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) =>

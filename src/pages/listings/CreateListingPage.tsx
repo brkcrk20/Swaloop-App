@@ -64,13 +64,17 @@ export const CreateListingPage: React.FC = () => {
     );
   };
 
-  const handlePublish = () => {
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handlePublish = async () => {
     if (!title.trim() || !lookingFor.trim() || images.length === 0) {
       showToast('Eksik Bilgi', 'Lütfen tüm zorunlu alanları doldurun.', 'warning');
       return;
     }
 
-    const newListing = listingService.createListing({
+    setIsPublishing(true);
+
+    const newListing = await listingService.createListing({
       userId: currentUser.id,
       title,
       description: description || `${title} temiz durumda, takasa uygundur.`,
@@ -94,6 +98,13 @@ export const CreateListingPage: React.FC = () => {
         isVerified: currentUser.isVerified,
       },
     });
+
+    setIsPublishing(false);
+
+    if (!newListing) {
+      showToast('Hata', 'İlan yayınlanırken bir sorun oluştu. Lütfen tekrar deneyin.', 'error');
+      return;
+    }
 
     showToast('İlanın Yayında! 🎉', 'Sana uygun takas teklifleri bekleyebilirsin.', 'success');
     navigate(`/ilan/${newListing.id}`);
@@ -435,10 +446,11 @@ export const CreateListingPage: React.FC = () => {
             <button
               type="button"
               onClick={handlePublish}
-              className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-base shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              disabled={isPublishing}
+              className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-base shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-60"
             >
               <Sparkles className="w-5 h-5 text-amber-300" />
-              <span>İlanı Ücretsiz Yayınla</span>
+              <span>{isPublishing ? 'Yayınlanıyor...' : 'İlanı Ücretsiz Yayınla'}</span>
             </button>
           </div>
         )}

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
+import { Listing } from '../../types';
 import { ProductCard } from '../../components/common/ProductCard';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import { TrustCard } from '../../components/common/TrustCard';
@@ -46,8 +47,12 @@ export const ProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'listings' | 'impact' | 'badges' | 'reviews'>('listings');
   const [showSvsModal, setShowSvsModal] = useState(false);
 
-  const myListings = listingService.getUserListings(currentUser.id);
+  const [myListings, setMyListings] = useState<Listing[]>([]);
   const myReviews = tradeService.getReviewsForUser(currentUser.id);
+
+  useEffect(() => {
+    listingService.getUserListings(currentUser.id).then(setMyListings);
+  }, [currentUser.id]);
 
   const handleShareProfile = () => {
     navigator.clipboard?.writeText(window.location.href);

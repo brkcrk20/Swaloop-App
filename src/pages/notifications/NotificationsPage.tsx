@@ -9,8 +9,8 @@ export const NotificationsPage: React.FC = () => {
 
   const handleNotificationClick = (n: (typeof notifications)[0]) => {
     markNotificationAsRead(n.id);
-    if (n.actionUrl) {
-      navigate(n.actionUrl);
+    if (n.linkUrl) {
+      navigate(n.linkUrl);
     }
   };
 
@@ -65,7 +65,7 @@ export const NotificationsPage: React.FC = () => {
                   <h4 className={`text-xs font-bold ${n.isRead ? 'text-stone-800' : 'text-emerald-950'}`}>
                     {n.title}
                   </h4>
-                  <span className="text-[10px] text-stone-400">{n.timestamp}</span>
+                  <span className="text-[10px] text-stone-400">{n.createdAt}</span>
                 </div>
                 <p className="text-xs text-stone-600 mt-0.5 leading-snug">{n.message}</p>
               </div>

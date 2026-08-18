@@ -12,23 +12,29 @@ let kpisStore: AdminKPI = { ...INITIAL_ADMIN_KPIS };
 let reportsStore: Report[] = [...INITIAL_REPORTS];
 let auditLogsStore: AdminAuditLog[] = [...INITIAL_ADMIN_LOGS];
 
-const initialDisputes: Dispute[] = [
-  {
-    id: 'disp-1',
-    tradeId: 'trade-offer-2',
-    initiator: CURRENT_USER,
-    respondent: OTHER_USERS['user-mehmet'],
-    initiatorItem: listingService.getAllListings()[3],
-    respondentItem: listingService.getAllListings()[2],
-    reason: 'Kargo paketinde adaptör eksik çıktı, tamamlanması talep ediliyor.',
-    status: 'under_review',
-    evidencePhotos: [
-      'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600&auto=format&fit=crop&q=80',
-    ],
-    createdAt: '18 Mayıs 2024, 10:15',
-  },
-];
-let disputesStore: Dispute[] = [...initialDisputes];
+// NOT: listingService artık Supabase'e bağlı (async) olduğu için ilan verisi
+// modül yüklenirken senkron alınamaz; ilk yüklemede boş başlatılıp arkadan doldurulur.
+let disputesStore: Dispute[] = [];
+
+listingService.getAllListings().then((allListings) => {
+  disputesStore = [
+    {
+      id: 'disp-1',
+      tradeId: 'trade-offer-2',
+      initiator: CURRENT_USER,
+      respondent: OTHER_USERS['user-mehmet'],
+      initiatorItem: allListings[3],
+      respondentItem: allListings[2],
+      reason: 'Kargo paketinde adaptör eksik çıktı, tamamlanması talep ediliyor.',
+      status: 'under_review',
+      evidencePhotos: [
+        'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600&auto=format&fit=crop&q=80',
+      ],
+      createdAt: '18 Mayıs 2024, 10:15',
+    },
+    ...disputesStore,
+  ];
+});
 
 export const adminService = {
   getKPIs(): AdminKPI {
@@ -65,9 +71,9 @@ export const adminService = {
     }
   },
 
-  moderateListing(listingId: string, action: 'approve' | 'remove', reason?: string) {
+  async moderateListing(listingId: string, action: 'approve' | 'remove', reason?: string) {
     if (action === 'remove') {
-      listingService.updateListing(listingId, { status: 'removed' });
+      await listingService.updateListing(listingId, { status: 'removed' });
       this.addAuditLog('İlan Kaldırıldı', `İlan #${listingId}`, reason || 'Moderasyon kararı');
     }
   },

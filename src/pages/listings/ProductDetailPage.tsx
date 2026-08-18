@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { listingService } from '../../services/listingService';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import { TrustCard } from '../../components/common/TrustCard';
+import { Listing } from '../../types';
 import {
   ArrowLeft,
   Heart,
@@ -24,10 +25,27 @@ export const ProductDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useApp();
 
-  const listing = listingService.getListingById(id || '');
+  const [listing, setListing] = useState<Listing | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
+
+  useEffect(() => {
+    setIsLoading(true);
+    listingService.getListingById(id || '').then((data) => {
+      setListing(data);
+      setIsLoading(false);
+    });
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!listing) {
     return (
@@ -45,8 +63,8 @@ export const ProductDetailPage: React.FC = () => {
     );
   }
 
-  const handleFavoriteToggle = () => {
-    const isFav = listingService.toggleFavorite(listing.id);
+  const handleFavoriteToggle = async () => {
+    const isFav = await listingService.toggleFavorite(listing.id);
     showToast(isFav ? 'Favorilere Eklendi' : 'Favorilerden Çıkarıldı', listing.title, 'info');
   };
 
@@ -250,9 +268,14 @@ export const ProductDetailPage: React.FC = () => {
               score: listing.user.trustScore,
               level: listing.user.trustScore >= 4.7 ? 'Güvenilir Üye' : 'Doğrulanmış Üye',
               phoneVerified: true,
+              idVerified: false,
               successfulTradesCount: 14,
               cancellationRate: 0.02,
               responseRate: 0.98,
+              averageRating: listing.user.trustScore,
+              reviewCount: 14,
+              reportCount: 0,
+              accountAgeDays: 180,
               positiveHighlights: [
                 'Zamanında Teslim',
                 'Ürün Açıklamayla Uyumlu',

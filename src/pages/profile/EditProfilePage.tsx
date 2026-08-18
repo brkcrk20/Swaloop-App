@@ -33,9 +33,12 @@ export const EditProfilePage: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = authService.updateUserProfile({
+    setIsSaving(true);
+    const updated = await authService.updateUserProfile({
       fullName,
       bio,
       city,
@@ -44,6 +47,13 @@ export const EditProfilePage: React.FC = () => {
       interests,
       wantedCategories,
     });
+    setIsSaving(false);
+
+    if (!updated) {
+      showToast('Hata', 'Profil güncellenirken bir sorun oluştu.', 'error');
+      return;
+    }
+
     setCurrentUser(updated);
     showToast('Profil Güncellendi', 'Bilgileriniz başarıyla kaydedildi.', 'success');
     navigate('/profil');
@@ -163,9 +173,10 @@ export const EditProfilePage: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer"
+            disabled={isSaving}
+            className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-60"
           >
-            Değişiklikleri Kaydet
+            {isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
           </button>
         </form>
       </div>

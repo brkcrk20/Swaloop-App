@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
@@ -31,7 +31,15 @@ export const SwipeMatchPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
 
-  const allListings = listingService.getAllListings().filter((l) => l.user.id !== currentUser.id);
+  const [allListings, setAllListings] = useState<Listing[]>([]);
+  const [userMyListings, setUserMyListings] = useState<Listing[]>([]);
+
+  useEffect(() => {
+    listingService
+      .getAllListings()
+      .then((all) => setAllListings(all.filter((l) => l.user.id !== currentUser.id)));
+    listingService.getUserListings(currentUser.id).then(setUserMyListings);
+  }, [currentUser.id]);
 
   // Match preferences state
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -66,7 +74,6 @@ export const SwipeMatchPage: React.FC = () => {
   } | null>(null);
 
   const currentListing = filteredListings[currentIndex];
-  const userMyListings = listingService.getUserListings(currentUser.id);
   const defaultMyListing = userMyListings[0] || allListings[0];
 
   // Helper to calculate match score between target and user's items

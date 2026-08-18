@@ -198,7 +198,7 @@ export const TradeDetailPage: React.FC = () => {
           <h2 className="text-xs font-bold text-stone-900 uppercase tracking-wider mb-3">
             6 Adımlı Takas Akışı
           </h2>
-          <Timeline events={trade.timeline} />
+          <Timeline timeline={trade.timeline} currentStatus={trade.status} />
         </div>
 
         {/* Side-by-side Product Comparison */}

@@ -6,6 +6,7 @@ import {
 
 import { impactService } from './impactService';
 import { supabase } from '../lib/supabase';
+import type { TablesUpdate } from '../types/supabase';
 
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1523275335684-37898b6bafeb?w=800&auto=format&fit=crop&q=80';
@@ -102,9 +103,10 @@ function mapListing(row: any): Listing {
 
     condition: row.condition as ListingCondition,
 
+    // BURASI GÜNCELLENDİ: Fotoğrafları objeden string'e çeviriyor
     images:
       Array.isArray(row.images) && row.images.length
-        ? row.images
+        ? row.images.map((img: any) => typeof img === 'string' ? img : img.storage_path || img)
         : [DEFAULT_IMAGE],
 
     location: {
@@ -170,9 +172,10 @@ async function enrichListings(rows: any[]): Promise<Listing[]> {
 
 export const listingService = {
   async getAllListings(): Promise<Listing[]> {
+    // BURASI GÜNCELLENDİ: İlanla birlikte profil ve fotoğrafları da çekiyoruz
     const { data, error } = await supabase
       .from('listings')
-      .select('*')
+      .select('*, user:profiles(*), images:listing_images(storage_path)')
       .eq('status', 'active')
       .order('created_at', { ascending: false });
 
@@ -187,9 +190,10 @@ export const listingService = {
   async getListingById(
     id: string
   ): Promise<Listing | undefined> {
+    // BURASI GÜNCELLENDİ
     const { data, error } = await supabase
       .from('listings')
-      .select('*')
+      .select('*, user:profiles(*), images:listing_images(storage_path)')
       .eq('id', id)
       .maybeSingle();
 
@@ -206,9 +210,10 @@ export const listingService = {
   async getUserListings(
     userId: string
   ): Promise<Listing[]> {
+    // BURASI GÜNCELLENDİ
     const { data, error } = await supabase
       .from('listings')
-      .select('*')
+      .select('*, user:profiles(*), images:listing_images(storage_path)')
       .eq('owner_id', userId)
       .order('created_at', { ascending: false });
 
@@ -266,6 +271,9 @@ export const listingService = {
         district: data.location.district,
         latitude: data.location.lat ?? null,
         longitude: data.location.lng ?? null,
+        looking_for: data.lookingFor,
+        delivery_options: data.deliveryOptions,
+        tags: data.tags ?? [],
         status: 'active',
       })
       .select('*')
@@ -280,19 +288,11 @@ export const listingService = {
       return undefined;
     }
 
-    /*
-     * listing_images tablosuna fotoğrafları kaydet.
-     *
-     * Şimdilik tablo kolonlarının tamamını varsaymıyoruz.
-     * Ana ilan kaydı başarıyla oluşturulduktan sonra
-     * fotoğrafları ayrıca bağlayacağız.
-     */
-
     if (data.images.length > 0) {
       const imageRows = data.images.map(
         (url, index) => ({
           listing_id: created.id,
-          image_url: url,
+          storage_path: url,
           sort_order: index,
         })
       );
@@ -344,7 +344,7 @@ export const listingService = {
     id: string,
     updates: Partial<Listing>
   ): Promise<Listing | undefined> {
-    const updateData: Record<string, any> = {};
+    const updateData: TablesUpdate<'listings'> = {};
 
     if (updates.title !== undefined) {
       updateData.title = updates.title;
@@ -392,6 +392,18 @@ export const listingService = {
 
     if (updates.status !== undefined) {
       updateData.status = updates.status;
+    }
+
+    if (updates.lookingFor !== undefined) {
+      updateData.looking_for = updates.lookingFor;
+    }
+
+    if (updates.deliveryOptions !== undefined) {
+      updateData.delivery_options = updates.deliveryOptions;
+    }
+
+    if (updates.tags !== undefined) {
+      updateData.tags = updates.tags;
     }
 
     updateData.updated_at =
@@ -543,7 +555,7 @@ export const listingService = {
       error: listingsError,
     } = await supabase
       .from('listings')
-      .select('*')
+      .select('*, user:profiles(*), images:listing_images(storage_path)') // BURASI DA GÜNCELLENDİ
       .in('id', ids);
 
     if (
@@ -564,9 +576,10 @@ export const listingService = {
     condition?: string,
     maxDistance?: number
   ): Promise<Listing[]> {
+    // BURASI GÜNCELLENDİ
     let request = supabase
       .from('listings')
-      .select('*')
+      .select('*, user:profiles(*), images:listing_images(storage_path)')
       .eq('status', 'active')
       .order('created_at', {
         ascending: false,

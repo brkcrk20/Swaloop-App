@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
@@ -6,6 +6,7 @@ import { messageService } from '../../services/messageService';
 import { OTHER_USERS } from '../../data/mockData';
 import { ProductCard } from '../../components/common/ProductCard';
 import { TrustCard } from '../../components/common/TrustCard';
+import { Listing } from '../../types';
 import { ArrowLeft, MessageSquare, ShieldCheck, MapPin, Calendar, Star, Leaf } from 'lucide-react';
 
 export const PublicProfilePage: React.FC = () => {
@@ -13,8 +14,12 @@ export const PublicProfilePage: React.FC = () => {
   const navigate = useNavigate();
 
   const user = id && OTHER_USERS[id] ? OTHER_USERS[id] : Object.values(OTHER_USERS)[0];
-  const userListings = listingService.getUserListings(user.id);
+  const [userListings, setUserListings] = useState<Listing[]>([]);
   const userReviews = tradeService.getReviewsForUser(user.id);
+
+  useEffect(() => {
+    listingService.getUserListings(user.id).then(setUserListings);
+  }, [user.id]);
 
   const handleStartChat = () => {
     const conv = messageService.getOrCreateConversationWithUser(user.id);

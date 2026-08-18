@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listingService } from '../../services/listingService';
 import { ProductCard } from '../../components/common/ProductCard';
+import { Listing } from '../../types';
 import {
   ArrowLeft,
   MapPin,
@@ -16,9 +17,13 @@ import { useApp } from '../../context/AppContext';
 export const NearbyMapPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentLocation } = useApp();
-  const allListings = listingService.getAllListings();
+  const [allListings, setAllListings] = useState<Listing[]>([]);
   const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   const [activeRadius, setActiveRadius] = useState<number>(5);
+
+  useEffect(() => {
+    listingService.getAllListings().then(setAllListings);
+  }, []);
 
   const safeMeetingSpots = [
     {

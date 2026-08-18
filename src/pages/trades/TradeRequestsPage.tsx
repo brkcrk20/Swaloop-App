@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import { listingService } from '../../services/listingService';
 import { TradeCard } from '../../components/common/TradeCard';
-import { TradeOffer } from '../../types';
+import { TradeOffer, Listing } from '../../types';
 import {
   Inbox,
   Send,
@@ -54,8 +54,15 @@ export const TradeRequestsPage: React.FC = () => {
   );
 
   // Smart matches generated from user listings vs catalog
-  const userListings = listingService.getUserListings(currentUser.id);
-  const otherListings = listingService.getAllListings().filter((l) => l.user.id !== currentUser.id);
+  const [userListings, setUserListings] = useState<Listing[]>([]);
+  const [otherListings, setOtherListings] = useState<Listing[]>([]);
+
+  useEffect(() => {
+    listingService.getUserListings(currentUser.id).then(setUserListings);
+    listingService
+      .getAllListings()
+      .then((all) => setOtherListings(all.filter((l) => l.user.id !== currentUser.id)));
+  }, [currentUser.id]);
 
   const smartMatches = otherListings.slice(0, 4).map((target, idx) => ({
     id: `smart-${target.id}`,
