@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
+import { TradeOffer } from '../../types';
 import { ArrowLeft, AlertTriangle, ShieldAlert, Camera, UploadCloud, CheckCircle2 } from 'lucide-react';
 
 export const DisputePage: React.FC = () => {
@@ -10,7 +11,12 @@ export const DisputePage: React.FC = () => {
   const tradeId = searchParams.get('tradeId');
   const { showToast } = useApp();
 
-  const trade = tradeId ? tradeService.getTradeById(tradeId) : undefined;
+  const [trade, setTrade] = useState<TradeOffer | undefined>(undefined);
+
+  useEffect(() => {
+    if (!tradeId) return;
+    tradeService.getTradeById(tradeId).then(setTrade);
+  }, [tradeId]);
 
   const [reason, setReason] = useState('broken_item');
   const [description, setDescription] = useState('');

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { messageService } from '../../services/messageService';
-import { tradeService } from '../../services/tradeService';
 import { Conversation, Message } from '../../types';
 import {
   ArrowLeft,
@@ -185,7 +184,10 @@ export const MessagesPage: React.FC = () => {
                   }
 
                   if (msg.type === 'trade_card' && msg.tradeOfferId) {
-                    const trade = tradeService.getTradeById(msg.tradeOfferId);
+                    // NOT: Önceden burada kullanılmayan bir `tradeService.getTradeById(...)`
+                    // çağrısı vardı (senkron sürüm). Artık tradeService async olduğu için
+                    // ve dönen değer zaten hiçbir yerde kullanılmıyordu, kaldırıldı. Kart
+                    // sadece `msg.tradeOfferId` ile /teklif/:id sayfasına yönlendiriyor.
                     return (
                       <div
                         key={msg.id}

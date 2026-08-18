@@ -32,19 +32,39 @@ export const TradeRequestsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'smart_matches' | 'active_process'>('incoming');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const allTrades = tradeService.getAllTrades();
-  const incomingTrades = tradeService.getUserIncomingTrades(currentUser.id);
-  const outgoingTrades = tradeService.getUserOutgoingTrades(currentUser.id);
-  const activeProcessTrades = allTrades.filter(
-    (t) =>
-      (t.initiatorId === currentUser.id || t.receiverId === currentUser.id) &&
-      (t.status === 'accepted' ||
-        t.status === 'locked' ||
-        t.status === 'delivery_planned' ||
-        t.status === 'shipped' ||
-        t.status === 'received' ||
-        t.status === 'verified')
-  );
+  const [isLoadingTrades, setIsLoadingTrades] = useState(true);
+  const [incomingTrades, setIncomingTrades] = useState<TradeOffer[]>([]);
+  const [outgoingTrades, setOutgoingTrades] = useState<TradeOffer[]>([]);
+  const [activeProcessTrades, setActiveProcessTrades] = useState<TradeOffer[]>([]);
+
+  const loadTrades = React.useCallback(async () => {
+    setIsLoadingTrades(true);
+    const [allTrades, incoming, outgoing] = await Promise.all([
+      tradeService.getAllTrades(),
+      tradeService.getUserIncomingTrades(currentUser.id),
+      tradeService.getUserOutgoingTrades(currentUser.id),
+    ]);
+
+    setIncomingTrades(incoming);
+    setOutgoingTrades(outgoing);
+    setActiveProcessTrades(
+      allTrades.filter(
+        (t) =>
+          (t.initiatorId === currentUser.id || t.receiverId === currentUser.id) &&
+          (t.status === 'accepted' ||
+            t.status === 'locked' ||
+            t.status === 'delivery_planned' ||
+            t.status === 'shipped' ||
+            t.status === 'received' ||
+            t.status === 'verified')
+      )
+    );
+    setIsLoadingTrades(false);
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    loadTrades();
+  }, [loadTrades]);
 
   const activeIncoming = incomingTrades.filter(
     (t) => t.status === 'offer_sent' || t.status === 'offer_received' || t.status === 'counter_offered'
@@ -72,20 +92,29 @@ export const TradeRequestsPage: React.FC = () => {
     reason: `${target.user.fullName} "${target.lookingFor}" arıyor, senin eşyaların ile tam uyumlu!`,
   }));
 
-  const handleAccept = (tradeId: string) => {
-    const updated = tradeService.acceptOffer(tradeId);
+  const handleAccept = async (tradeId: string) => {
+    const updated = await tradeService.acceptOffer(tradeId);
     if (updated) {
       showToast('Teklif Kabul Edildi!', 'Ürünler takas için kilitlendi. 6 adımlı süreç başladı.', 'success');
       navigate(`/takas-sureci/${tradeId}`);
     }
   };
 
-  const handleReject = (tradeId: string) => {
-    const updated = tradeService.rejectOffer(tradeId);
+  const handleReject = async (tradeId: string) => {
+    const updated = await tradeService.rejectOffer(tradeId);
     if (updated) {
       showToast('Teklif Reddedildi', 'Takas isteği geri çevrildi.', 'info');
+      loadTrades();
     }
   };
+
+  if (isLoadingTrades) {
+    return (
+      <div className="min-h-screen bg-stone-50 pb-24 text-stone-900 flex items-center justify-center">
+        <p className="text-sm text-stone-500">Takas istekleri yükleniyor...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 pb-24 text-stone-900">

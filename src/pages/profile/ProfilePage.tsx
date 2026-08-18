@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
-import { Listing } from '../../types';
+import { Listing, Review } from '../../types';
 import { ProductCard } from '../../components/common/ProductCard';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import { TrustCard } from '../../components/common/TrustCard';
@@ -48,10 +48,11 @@ export const ProfilePage: React.FC = () => {
   const [showSvsModal, setShowSvsModal] = useState(false);
 
   const [myListings, setMyListings] = useState<Listing[]>([]);
-  const myReviews = tradeService.getReviewsForUser(currentUser.id);
+  const [myReviews, setMyReviews] = useState<Review[]>([]);
 
   useEffect(() => {
     listingService.getUserListings(currentUser.id).then(setMyListings);
+    tradeService.getReviewsForUser(currentUser.id).then(setMyReviews);
   }, [currentUser.id]);
 
   const handleShareProfile = () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
@@ -12,14 +12,34 @@ export const TradeOffersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'completed'>('incoming');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const allTrades = tradeService.getAllTrades();
-  const incomingTrades = tradeService.getUserIncomingTrades(currentUser.id);
-  const outgoingTrades = tradeService.getUserOutgoingTrades(currentUser.id);
-  const completedTrades = allTrades.filter(
-    (t) =>
-      (t.initiatorId === currentUser.id || t.receiverId === currentUser.id) &&
-      (t.status === 'completed' || t.status === 'rejected' || t.status === 'cancelled')
-  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [incomingTrades, setIncomingTrades] = useState<TradeOffer[]>([]);
+  const [outgoingTrades, setOutgoingTrades] = useState<TradeOffer[]>([]);
+  const [completedTrades, setCompletedTrades] = useState<TradeOffer[]>([]);
+
+  const loadTrades = useCallback(async () => {
+    setIsLoading(true);
+    const [allTrades, incoming, outgoing] = await Promise.all([
+      tradeService.getAllTrades(),
+      tradeService.getUserIncomingTrades(currentUser.id),
+      tradeService.getUserOutgoingTrades(currentUser.id),
+    ]);
+
+    setIncomingTrades(incoming);
+    setOutgoingTrades(outgoing);
+    setCompletedTrades(
+      allTrades.filter(
+        (t) =>
+          (t.initiatorId === currentUser.id || t.receiverId === currentUser.id) &&
+          (t.status === 'completed' || t.status === 'rejected' || t.status === 'cancelled')
+      )
+    );
+    setIsLoading(false);
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    loadTrades();
+  }, [loadTrades]);
 
   const activeIncoming = incomingTrades.filter(
     (t) => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled'
@@ -40,22 +60,31 @@ export const TradeOffersPage: React.FC = () => {
     return list;
   };
 
-  const handleAccept = (tradeId: string) => {
-    const updated = tradeService.acceptOffer(tradeId);
+  const handleAccept = async (tradeId: string) => {
+    const updated = await tradeService.acceptOffer(tradeId);
     if (updated) {
       showToast('Teklif Kabul Edildi!', 'Ürünler takas için kilitlendi. Teslimat planına geçebilirsiniz.', 'success');
       navigate(`/teklif/${tradeId}`);
     }
   };
 
-  const handleReject = (tradeId: string) => {
-    const updated = tradeService.rejectOffer(tradeId);
+  const handleReject = async (tradeId: string) => {
+    const updated = await tradeService.rejectOffer(tradeId);
     if (updated) {
       showToast('Teklif Reddedildi', 'Takas teklifi geri çevrildi.', 'info');
+      loadTrades();
     }
   };
 
   const currentList = getFilteredList();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-stone-50 pb-24 text-stone-900 flex items-center justify-center">
+        <p className="text-sm text-stone-500">Takaslar yükleniyor...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 pb-24 text-stone-900">

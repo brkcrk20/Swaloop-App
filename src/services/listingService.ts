@@ -139,7 +139,7 @@ function mapListing(row: any): Listing {
   };
 }
 
-async function enrichListings(rows: any[]): Promise<Listing[]> {
+export async function enrichListings(rows: any[]): Promise<Listing[]> {
   if (!rows.length) return [];
 
   const categoryIds = [

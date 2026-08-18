@@ -6,7 +6,7 @@ import { messageService } from '../../services/messageService';
 import { OTHER_USERS } from '../../data/mockData';
 import { ProductCard } from '../../components/common/ProductCard';
 import { TrustCard } from '../../components/common/TrustCard';
-import { Listing } from '../../types';
+import { Listing, Review } from '../../types';
 import { ArrowLeft, MessageSquare, ShieldCheck, MapPin, Calendar, Star, Leaf } from 'lucide-react';
 
 export const PublicProfilePage: React.FC = () => {
@@ -15,10 +15,11 @@ export const PublicProfilePage: React.FC = () => {
 
   const user = id && OTHER_USERS[id] ? OTHER_USERS[id] : Object.values(OTHER_USERS)[0];
   const [userListings, setUserListings] = useState<Listing[]>([]);
-  const userReviews = tradeService.getReviewsForUser(user.id);
+  const [userReviews, setUserReviews] = useState<Review[]>([]);
 
   useEffect(() => {
     listingService.getUserListings(user.id).then(setUserListings);
+    tradeService.getReviewsForUser(user.id).then(setUserReviews);
   }, [user.id]);
 
   const handleStartChat = () => {

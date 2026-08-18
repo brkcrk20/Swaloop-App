@@ -101,7 +101,7 @@ export const MakeOfferPage: React.FC = () => {
     ...selectedListings.map((l) => l.estimatedImpact),
   ]);
 
-  const handleSubmitOffer = (e: React.FormEvent) => {
+  const handleSubmitOffer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedListings.length === 0) {
       showToast('Lütfen teklif etmek için en az bir ürününüzü seçin.', undefined, 'error');
@@ -110,7 +110,7 @@ export const MakeOfferPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const newTrade = tradeService.createTradeOffer({
+      const newTrade = await tradeService.createTradeOffer({
         initiator: currentUser,
         receiver: {
           id: targetListing.userId,
@@ -160,6 +160,11 @@ export const MakeOfferPage: React.FC = () => {
           locationName: meetingLocation,
         },
       });
+
+      if (!newTrade) {
+        showToast('Teklif oluşturulurken bir hata oluştu.', undefined, 'error');
+        return;
+      }
 
       showToast('Takas Teklifi Gönderildi!', 'Karşı taraf onayladığında bildirim alacaksınız.', 'success');
       navigate(`/teklif/${newTrade.id}`);

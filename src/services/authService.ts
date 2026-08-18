@@ -68,7 +68,7 @@ function trustLevelFromScore(
   return 'Başlangıç';
 }
 
-function mapProfile(row: any, trust?: any | null): UserProfile {
+export function mapProfile(row: any, trust?: any | null): UserProfile {
   const completedTrades = trust?.completed_trades ?? 0;
   const cancelledTrades = trust?.cancelled_trades ?? 0;
   const totalTrades = completedTrades + cancelledTrades;

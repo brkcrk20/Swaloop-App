@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import { messageService } from '../../services/messageService';
+import { TradeOffer } from '../../types';
 import { Timeline } from '../../components/common/Timeline';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import { SvsExplanationModal } from '../../components/common/SvsExplanationModal';
@@ -31,7 +32,8 @@ export const TradeDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
 
-  const [trade, setTrade] = useState(() => (id ? tradeService.getTradeById(id) : undefined));
+  const [trade, setTrade] = useState<TradeOffer | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showCounterModal, setShowCounterModal] = useState(false);
   const [showSvsModal, setShowSvsModal] = useState(false);
@@ -44,6 +46,29 @@ export const TradeDetailPage: React.FC = () => {
     itemAccuracy: 5,
     delivery: 5,
   });
+
+  const loadTrade = useCallback(async () => {
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    const t = await tradeService.getTradeById(id);
+    setTrade(t);
+    setIsLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    loadTrade();
+  }, [loadTrade]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-stone-50 p-6 flex items-center justify-center">
+        <p className="text-sm text-stone-500">Takas yükleniyor...</p>
+      </div>
+    );
+  }
 
   if (!trade) {
     return (
@@ -67,33 +92,33 @@ export const TradeDetailPage: React.FC = () => {
   const myItem = isInitiator ? trade.offeredListings[0] : trade.requestedListings[0];
   const otherItem = isInitiator ? trade.requestedListings[0] : trade.offeredListings[0];
 
-  const handleAccept = () => {
-    const updated = tradeService.acceptOffer(trade.id);
+  const handleAccept = async () => {
+    const updated = await tradeService.acceptOffer(trade.id);
     if (updated) {
-      setTrade({ ...updated });
+      setTrade(updated);
       showToast('Takas Teklifi Kabul Edildi!', 'Ürünler takas için kilitlendi.', 'success');
       navigate(`/takas-sureci/${trade.id}`);
     }
   };
 
-  const handleReject = () => {
-    const updated = tradeService.rejectOffer(trade.id);
+  const handleReject = async () => {
+    const updated = await tradeService.rejectOffer(trade.id);
     if (updated) {
-      setTrade({ ...updated });
+      setTrade(updated);
       showToast('Teklif Reddedildi', undefined, 'info');
     }
   };
 
-  const handleAdvanceStep = (step: 4 | 5 | 6) => {
-    const updated = tradeService.advanceTradeStep(trade.id, step);
+  const handleAdvanceStep = async (step: 4 | 5 | 6) => {
+    const updated = await tradeService.advanceTradeStep(trade.id, step);
     if (updated) {
-      setTrade({ ...updated });
+      setTrade(updated);
       if (step === 4) {
         showToast('Teslimat Aşamasına Geçildi', 'Kargo veya buluşma planı aktif.', 'info');
       } else if (step === 5) {
         showToast('Teslimat Onaylandı!', 'Karşı taraf onayladığında takas başarıyla tamamlanacak.', 'success');
       } else if (step === 6) {
-        showToast('Tebrikler! Takas Tamamlandı 🎉', `Toplam +${trade.combinedImpact.co2eKg} kg CO₂e tasarrufu sağlandı!`, 'success');
+        showToast('Tebrikler! Takas Tamamlandı 🎉', `Toplam +${updated.combinedImpact.co2eKg} kg CO₂e tasarrufu sağlandı!`, 'success');
         setShowReviewModal(true);
       }
     }
@@ -104,9 +129,9 @@ export const TradeDetailPage: React.FC = () => {
     navigate(`/mesajlar/${conv.id}`);
   };
 
-  const handleSubmitReview = (e: React.FormEvent) => {
+  const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    tradeService.submitReview({
+    await tradeService.submitReview({
       tradeId: trade.id,
       authorId: currentUser.id,
       authorName: currentUser.fullName,
@@ -119,6 +144,7 @@ export const TradeDetailPage: React.FC = () => {
 
     showToast('Değerlendirmeniz Kaydedildi!', 'Topluluk güven skoruna katkınız için teşekkürler.', 'success');
     setShowReviewModal(false);
+    loadTrade();
   };
 
   const isReviewedByMe = isInitiator ? trade.isReviewedByInitiator : trade.isReviewedByReceiver;
