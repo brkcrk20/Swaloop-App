@@ -5,7 +5,11 @@ import { SwaloopLogo } from '../../components/common/SwaloopLogo';
 import { ArrowLeft, Smartphone, ShieldCheck, AlertCircle, ArrowRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-export const PhoneAuthPage: React.FC = () => {
+interface PhoneAuthPageProps {
+  isRegister: boolean;
+}
+
+export const PhoneAuthPage: React.FC<PhoneAuthPageProps> = ({ isRegister }) => {
   const navigate = useNavigate();
   const { showToast } = useApp();
   const [phone, setPhone] = useState('');
@@ -25,7 +29,7 @@ export const PhoneAuthPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const check = authService.checkPhoneRegistered(phone);
+    const check = await authService.checkPhoneRegistered(phone);
 
     // If existing, we can let user proceed to login OTP or show existing account notice
     await authService.sendOtp(phone);

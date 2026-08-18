@@ -48,14 +48,14 @@ export const CreateProfilePage: React.FC = () => {
     showToast('Profil Fotoğrafı Seçildi', 'Görsel güncellendi.', 'info');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
       showToast('Eksik Bilgi', 'Lütfen adınızı ve soyadınızı giriniz.', 'warning');
       return;
     }
 
-    const newUser = authService.createProfile({
+    const newUser = await authService.createProfile({
       phone,
       fullName,
       city,
@@ -64,6 +64,15 @@ export const CreateProfilePage: React.FC = () => {
       interests: selectedInterests,
       wantedCategories: selectedWanted,
     });
+    
+    if (!newUser) {
+  showToast(
+    'Hata',
+    'Profil oluşturulamadı. Lütfen tekrar deneyin.',
+    'error'
+  );
+  return;
+}
 
     setCurrentUser(newUser);
     showToast('Profil Oluşturuldu! 🎉', 'Swaloop dünyasına hoş geldin.', 'success');
