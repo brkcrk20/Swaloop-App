@@ -20,8 +20,8 @@ export const CreateProfilePage: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState(
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'
   );
-  const [selectedInterests, setSelectedInterests] = useState<CategoryId[]>(['elektronik', 'spor']);
-  const [selectedWanted, setSelectedWanted] = useState<CategoryId[]>(['elektronik', 'kitap_muzik']);
+  const [selectedInterests, setSelectedInterests] = useState<CategoryId[]>(['electronics', 'sports']);
+  const [selectedWanted, setSelectedWanted] = useState<CategoryId[]>(['electronics', 'books']);
 
   const toggleInterest = (id: CategoryId) => {
     setSelectedInterests((prev) =>

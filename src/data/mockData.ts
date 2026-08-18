@@ -24,8 +24,8 @@ export const CURRENT_USER: UserProfile = {
   district: 'Kadıköy',
   memberSince: 'Ocak 2024',
   bio: 'Sıfır atık ve sürdürülebilir yaşam tutkunu. Fotoğraf ve outdoor ekipmanlarını dolaşıma sokmayı seviyorum.',
-  interests: ['elektronik', 'spor', 'hobi', 'kitap_muzik'],
-  wantedCategories: ['elektronik', 'spor', 'ev_yasam'],
+  interests: ['electronics', 'sports', 'hobby', 'books'],
+  wantedCategories: ['electronics', 'sports', 'home-living'],
   isVerified: true,
   trustProfile: {
     score: 4.88,
@@ -71,8 +71,8 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     district: 'Kadıköy',
     memberSince: 'Şubat 2024',
     bio: 'Bisiklet tutkunu ve tasarımcı. İhtiyaç fazlası bisiklet ve spor aksesuarlarımı takaslıyorum.',
-    interests: ['spor', 'moda', 'hobi'],
-    wantedCategories: ['elektronik', 'kitap_muzik'],
+    interests: ['sports', 'fashion', 'hobby'],
+    wantedCategories: ['electronics', 'books'],
     isVerified: true,
     trustProfile: {
       score: 4.92,
@@ -111,8 +111,8 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     district: 'Kadıköy',
     memberSince: 'Mart 2024',
     bio: 'Yazılım geliştirici. Tablet ve bilgisayar aksesuarlarını takaslamak istiyorum.',
-    interests: ['elektronik', 'kitap_muzik'],
-    wantedCategories: ['elektronik', 'ev_yasam'],
+    interests: ['electronics', 'books'],
+    wantedCategories: ['electronics', 'home-living'],
     isVerified: true,
     trustProfile: {
       score: 4.75,
@@ -151,8 +151,8 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     district: 'Beşiktaş',
     memberSince: 'Nisan 2024',
     bio: 'Bitki aşığı, müzik ve ses ekipmanları meraklısı.',
-    interests: ['ev_yasam', 'kitap_muzik', 'hobi'],
-    wantedCategories: ['spor', 'elektronik'],
+    interests: ['home-living', 'books', 'hobby'],
+    wantedCategories: ['sports', 'electronics'],
     isVerified: true,
     trustProfile: {
       score: 4.85,
@@ -200,7 +200,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'Canon EOS 200D',
     description:
       'Fotoğrafçılığa başlamak için harika bir gövde. 18-55mm IS STM kit lensi, orijinal bataryası, şarj aleti ve 32GB SD kart ile birlikte verilecektir. Shutter sayısı yaklaşık 6.400 civarındadır. Kozmetik ve mekanik olarak kusursuz durumdadır.',
-    categoryId: 'elektronik',
+    categoryId: 'electronics',
     condition: 'very_good',
     images: [
       'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80',
@@ -249,7 +249,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'Bianchi Bisiklet',
     description:
       'Bianchi Milano şehir bisikleti. 28 jant, 21 vites Shimano Tourney set. Sele ve elcikler deri kaplamadır. Ön sepet ve arka bagaj dahildir. Yaz sezonu öncesi tüm bakımları Kadıköy yetkili servisinde yapılmıştır.',
-    categoryId: 'spor',
+    categoryId: 'sports',
     condition: 'like_new',
     images: [
       'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=800&auto=format&fit=crop&q=80',
@@ -297,7 +297,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'MacBook Air M1',
     description:
       'Apple M1 8GB RAM / 256GB SSD Uzay Grisi. Pil sağlığı %91 (Devir sayısı: 142). Çizik, vuruk veya ezik yoktur. Orijinal 30W şarj adaptörü ve Type-C kablosu kutusuyla teslim edilecektir.',
-    categoryId: 'elektronik',
+    categoryId: 'electronics',
     condition: 'very_good',
     images: [
       'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&auto=format&fit=crop&q=80',
@@ -345,7 +345,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'iPad Pro 11" 128GB Wi-Fi',
     description:
       'Apple iPad Pro 11 inç 3. Nesil (M1 İşlemci). Ekranında kağıt hissi veren Paperlike koruyucu takılı. Çiziksiz, kılıfıyla birlikte.',
-    categoryId: 'elektronik',
+    categoryId: 'electronics',
     condition: 'like_new',
     images: [
       'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&auto=format&fit=crop&q=80',
@@ -391,7 +391,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'Sony WH-1000XM4 Kulaklık',
     description:
       'Gürültü engelleyici kablosuz kulaküstü kulaklık. Taşıma çantası, uçak adaptörü ve kabloları tam. Ses performansı ve bataryası ilk günkü gibi.',
-    categoryId: 'elektronik',
+    categoryId: 'electronics',
     condition: 'very_good',
     images: [
       'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
@@ -436,7 +436,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'Husky 3 Kişilik Kamp Çadırı',
     description:
       '4 mevsim hafif kamp çadırı. Çift tenteli, fırtınaya ve suya dayanıklı. Sadece 2 kampta kullanıldı, hiçbir yırtık veya deformasyon yoktur.',
-    categoryId: 'spor',
+    categoryId: 'sports',
     condition: 'like_new',
     images: [
       'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800&auto=format&fit=crop&q=80',
@@ -480,7 +480,7 @@ export const INITIAL_LISTINGS: Listing[] = [
     title: 'Lego NASA Apollo Saturn V',
     description:
       '1969 parça koleksiyonluk Lego seti. Kutusu, kitapçığı ve tüm mini figürleri eksiksiz. Bir kere birleştirildi ve cam vitrinde sergilendi.',
-    categoryId: 'hobi',
+    categoryId: 'hobby',
     condition: 'like_new',
     images: [
       'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?w=800&auto=format&fit=crop&q=80',
@@ -703,7 +703,7 @@ export const INITIAL_LOOPS: Loop[] = [
   {
     id: 'loop-kadikoy-1',
     title: 'Kadıköy Teknoloji & Spor Çemberi (3 Kişilik)',
-    category: 'elektronik',
+    category: 'electronics',
     totalParticipants: 3,
     status: 'locked',
     createdAt: '2024-05-17T15:00:00Z',
@@ -929,7 +929,7 @@ export const INITIAL_MYSTERY_ITEMS: MysterySwapItem[] = [
   {
     id: 'myst-1',
     title: 'Vintage Mekanik Saat & Deri Kordon',
-    category: 'moda',
+    category: 'fashion',
     hint: 'Zamanı retro tarzda yakalamak isteyen bir koleksiyoncu için...',
     image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=800&auto=format&fit=crop&q=80',
     estimatedCo2e: 4.5,
@@ -940,7 +940,7 @@ export const INITIAL_MYSTERY_ITEMS: MysterySwapItem[] = [
   {
     id: 'myst-2',
     title: 'Fujifilm Instax Mini Anlık Kamera',
-    category: 'elektronik',
+    category: 'electronics',
     hint: 'Anıları hemen somut kağıda dökmek isteyen bir yaratıcıya...',
     image: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop&q=80',
     estimatedCo2e: 6.8,
@@ -951,7 +951,7 @@ export const INITIAL_MYSTERY_ITEMS: MysterySwapItem[] = [
   {
     id: 'myst-3',
     title: 'Bonsai Yetiştirme Kiti & Seramik Saksı',
-    category: 'ev_yasam',
+    category: 'home-living',
     hint: 'Evine huzur ve yeşil bir nefes katmak isteyen bir doğasevere...',
     image: 'https://images.unsplash.com/photo-1512428813834-c702c7702b78?w=800&auto=format&fit=crop&q=80',
     estimatedCo2e: 3.2,

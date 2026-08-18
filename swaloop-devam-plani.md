@@ -1,11 +1,16 @@
 # Swaloop — Supabase Entegrasyonu Devam Planı
 
-> **GÜNCELLEME (bu turda):** Takas sistemi bağlama işi (aşağıdaki §5) artık
-> **tamamlandı** — `tradeService.ts` tamamen yeniden yazıldı, 8 sayfanın
-> tamamı async'e çevrildi, `npx tsc --noEmit` ve `npx vite build` hatasız
-> geçti. Ayrıntılar için §5.6'ya bakın. Bir sonraki oturumda §6'daki
-> maddelerden birine geçilebilir (önerilen sıra: mesajlaşma → fotoğraf
-> yükleme → loop → topluluk).
+> **GÜNCELLEME (bu turda, 3. tur):** İlan oluşturma her zaman hata veriyordu —
+> sebebi bulundu ve düzeltildi: **kategori id kümesi frontend ile canlı DB
+> arasında hem dilde hem içerikte uyumsuzdu.** Ayrıntılar için **§7**'ye
+> bakın. `npx tsc --noEmit` ve `npx vite build` hatasız geçti.
+>
+> Ayrıca 2. tur güncellemesi (mesajlaşma, §6.1) kullanıcı tarafından canlıya
+> `supabase db push` ile başarıyla uygulandı — migration artık gerçek
+> DB'de aktif.
+>
+> Bir sonraki oturumda §6'daki kalan maddelerden birine geçilebilir
+> (fotoğraf yükleme → loop → topluluk).
 
 Bu doküman, yeni bir konuşmada Claude'a (veya başka birine) verilip kaldığı yerden
 devam edilebilmesi için hazırlandı. Yeni konuşmayı açarken bu dosyayı ve güncel
@@ -267,10 +272,9 @@ edecek — bkz. plan §5.5 madde 5'teki test listesi hâlâ geçerli):**
    politikaları migration'larda yok) kontrol edin.
 3. Test başarılıysa §6'daki bir sonraki önceliğe (mesajlaşma) geçilebilir.
 
-## 6. Sonraki öncelik (takas sisteminden sonra)
+## 6. Sonraki öncelikler (takas sisteminden sonra)
 
-1. Mesajlaşma — önce `messages`/`conversations` tabloları için migration
-   yazılmalı (DB'de hiç yok), sonra `messageService.ts` bağlanmalı.
+1. ~~Mesajlaşma~~ — ✅ **tamamlandı, bkz. §6.1.**
 2. Gerçek fotoğraf yükleme — Supabase Storage bucket açılmalı
    (`config.toml`'da `[storage.buckets.images]` etkinleştirilmeli) ve
    `CreateListingPage.tsx`'e gerçek dosya seçici + `supabase.storage.upload`
@@ -279,3 +283,176 @@ edecek — bkz. plan §5.5 madde 5'teki test listesi hâlâ geçerli):**
    bağlanmalı (takas sistemiyle benzer desende, daha basit çünkü FK zinciri
    yok).
 4. Topluluk/rozet — önce badge için tablo tasarımı/migration gerekiyor.
+
+## 7. YAPILDI — kategori (CategoryId) uyumsuzluğu düzeltildi (bu turda, 3. tur)
+
+**Sorun:** Kullanıcı "ilan eklemeye basınca hata veriyordu" diye bildirdi.
+Kök sebep `src/services/listingService.ts` içindeki `getCategoryUuid`
+fonksiyonuydu — ilanın kategorisini canlı `categories` tablosunda `slug`
+sütununa göre arıyor, ama frontend'in kullandığı kategori id'leri
+(`elektronik`, `ev_yasam`, `spor`, `moda`, `hobi`, `arac_parca`,
+`kitap_muzik`, `bebek_cocuk`, `diger` — Türkçe) ile canlı DB'deki gerçek
+`slug` değerleri (İngilizce, farklı bir küme) birbirini tutmuyordu.
+Kullanıcıdan `select id, name, slug from categories` çıktısını istedik,
+gerçek veri şu şekilde çıktı:
+
+| DB slug (İngilizce) | DB name (Türkçe) |
+|---|---|
+| electronics | Elektronik |
+| home-living | Ev & Yaşam |
+| sports | Spor |
+| fashion | Moda |
+| hobby | Hobi |
+| books | Kitap |
+| music | Müzik |
+| photography | Fotoğraf |
+| collectibles | Koleksiyon |
+| other | Diğer |
+
+Sadece dil farkı değil, **kategori kümesi de farklıydı**:
+`arac_parca`/`kitap_muzik`/`bebek_cocuk` DB'de hiç yoktu (kitap_muzik'in
+DB'de `books` ve `music` diye ayrı iki karşılığı vardı); DB'deki
+`photography`/`collectibles` ise frontend'de hiç tanımlı değildi.
+
+**Çözüm yaklaşımı:** Ayrı bir çeviri/eşleme katmanı eklemek yerine (bu,
+gelecekte DB tarafında kategori eklenip çıkarıldıkça tekrar bozulacak kırılgan
+bir çözüm olurdu), **frontend'in kategori id'lerini doğrudan DB'deki gerçek
+`slug` değerleriyle birebir aynı yaptık.** Türkçe isimler sadece görüntüleme
+katmanında (`CATEGORIES` sabitinin `name` alanında) kaldı. Böylece
+`getCategoryUuid`/`getCategorySlug` fonksiyonları hiçbir çeviri yapmadan
+doğrudan çalışıyor.
+
+**Değiştirilen dosyalar:**
+
+- **`src/types/index.ts`** — `CategoryId` union'ı artık DB slug'larıyla
+  birebir aynı: `electronics | home-living | sports | fashion | hobby |
+  books | music | photography | collectibles | other`.
+- **`src/constants/index.ts`** — `CATEGORIES` sabiti 9 yerine **10 kategori**
+  içeriyor artık (yeni: Fotoğraf, Müzik ayrı; kaldırılan: Araç & Parça,
+  Bebek & Çocuk — bunlar canlı DB'de hiç yoktu). Her kategorinin `id`'si DB
+  slug'ı, `name`'i Türkçe.
+- **`src/services/impactService.ts`** — `CATEGORY_IMPACT_FACTORS` tablosu
+  yeni 10 id ile güncellendi (silinen 3 kategori için tahmini LCA
+  değerleri kaldırıldı, yeni eklenen `music`/`photography`/`collectibles`
+  için makul tahmini değerler dolduruldu — bunlar gerçek bir LCA
+  kaynağına dayanmıyor, ürün kararınıza göre revize edilebilir). Ayrıca
+  `diger` fallback'i `other` olarak düzeltildi (bu, DB değişikliği
+  yapılmasa bile zaten bir tip hatasıydı).
+- **`src/data/mockData.ts`** — mock kullanıcıların `interests`/
+  `wantedCategories` alanları ve mock ilanların `categoryId` alanları yeni
+  id'lere çevrildi (mock loop/mystery-swap verilerindeki `category` alanları
+  dahil). Ürün `tags` alanlarındaki Türkçe kelimeler (örn. `'spor'`,
+  `'hobi'` serbest arama etiketi olarak) **kasıtlı olarak değiştirilmedi**
+  — `tags: string[]` serbest metin, `CategoryId` değil.
+- **`src/pages/auth/CreateProfilePage.tsx`** ve
+  **`src/pages/listings/CreateListingPage.tsx`** — varsayılan seçili
+  kategori değerleri yeni id'lere güncellendi.
+- **`src/services/authService.backup.ts`** — silindi. Hiçbir yerden import
+  edilmiyordu (canlıda kullanılan `authService.ts`'in eski bir kopyasıydı)
+  ama içindeki eski Türkçe kategori id'leri artık `CategoryId` tipine
+  uymadığı için derlemeyi kırıyordu.
+
+**Test durumu:** `npx tsc --noEmit` ve `npx vite build` hatasız geçti.
+**Gerçek Supabase'e karşı ilan oluşturma bu ortamdan test edilmedi** — sizin
+`npm run dev` ile denemeniz gerekiyor (bkz. aşağıdaki test listesi).
+Migration gerektirmiyor, sadece kod değişikliği — `categories` tablosunun
+kendisine dokunulmadı.
+
+**Yeni oturumda / sizin ortamınızda ilk yapılması gereken:**
+
+1. `npm run dev` ile ilan oluşturma akışını uçtan uca deneyin: bir kategori
+   seçip (örn. Elektronik) ilan yayınlayın → artık "Geçersiz kategori"
+   hatası almamalısınız, ilan gerçekten `listings` tablosuna yazılmalı.
+2. `impactService.ts`'teki `music`/`photography`/`collectibles` için
+   girdiğim LCA tahmin değerleri (co2Kg, waterL, vb.) gerçek bir kaynağa
+   dayanmıyor — SVS metodolojinize göre gözden geçirip düzeltmek isteyebilirsiniz.
+3. Test başarılıysa §6 madde 2'ye (gerçek fotoğraf yükleme) geçilebilir.
+
+### 6.1 YAPILDI — mesajlaşma (bu turda tamamlanan kısım)
+
+**Eklenen migration:** `supabase/migrations/20260818140000_create_messaging_tables.sql`
+
+- `conversations` tablosu: `participant_one_id` / `participant_two_id`
+  (`profiles.id`'ye FK), opsiyonel `related_listing_id` ve
+  `active_trade_offer_id`. İki kullanıcı arasında tekrar eden satır
+  açılmasını engellemek için `least()/greatest()` ile normalize edilmiş bir
+  **unique index** var (`conversations_unique_pair_idx`).
+- `messages` tablosu: `conversation_id`, `sender_id`, `content`, `type`
+  (frontend'deki `Message['type']` union'ıyla birebir aynı: text /
+  trade_card / counter_card / delivery_card / system_card), opsiyonel
+  `trade_offer_id`, `is_read`.
+- Bir trigger (`touch_conversation_on_new_message`) her yeni mesajda
+  `conversations.updated_at`'i güncelliyor — konuşma listesi "son mesaja
+  göre" sıralanabilsin diye.
+- **RLS politikaları bu turda dahil edildi** (önceki iki migration'ın
+  aksine — o ikisinde "canlı RLS'i bilmiyorum" notu vardı, ama bunlar yeni
+  tablolar olduğu için politikaları ben tanımladım): bir konuşmayı/mesajı
+  sadece o konuşmanın iki tarafı görebilir/yazabilir
+  (`auth.uid() = participant_one_id or auth.uid() = participant_two_id`).
+
+**Değiştirilen dosyalar:**
+
+- **`src/types/supabase.ts`** — `conversations` ve `messages` için
+  `Row/Insert/Update/Relationships` tipleri elle eklendi. **Not:** Bu,
+  gerçek `supabase gen types` çıktısı değil, migration'a bakarak elle
+  yazıldı. Migration'ı canlıya push ettikten sonra, doğruluğu garantilemek
+  için `supabase gen types typescript` ile bu dosyayı yeniden üretmeniz
+  önerilir (elle yazılan hâli muhtemelen doğru ama otomatik üretim daha
+  güvenilir).
+- **`src/services/messageService.ts`** — tamamen yeniden yazıldı. Artık
+  `INITIAL_CONVERSATIONS`/`INITIAL_MESSAGES` mock verisi yerine gerçek
+  sorgular kullanıyor. Tüm metodlar `async`. API imzası değişti (önceki
+  senkron sürümle **uyumsuz**, bkz. aşağıdaki liste):
+  - `getConversations(currentUserId)` — artık kullanıcı id'si parametre
+    olarak isteniyor (önceden global mock listeyi döndürüyordu).
+  - `getConversationById(id, currentUserId)`
+  - `getMessages(conversationId)` — aynı imza, artık `Promise`.
+  - `sendMessage(conversationId, senderId, content, type?, tradeOfferId?)`
+    — önceden `senderId` yoktu (sabit `CURRENT_USER` kullanılıyordu).
+  - `getOrCreateConversationWithUser(currentUserId, targetUserId, relatedListingId?)`
+    — önceden sadece `targetUserId` alıyordu.
+  - **Yeni metod:** `markConversationRead(conversationId, currentUserId)` —
+    karşı tarafın mesajlarını okundu işaretler.
+- **5 sayfa** async akışa ve yeni imzaya göre güncellendi:
+  `MessagesPage.tsx` (konuşma/mesaj listeleri artık `useEffect` içinde
+  yükleniyor, yükleniyor durumları eklendi, konuşmaya girince
+  `markConversationRead` çağrılıyor), `TradeDetailPage.tsx`,
+  `PublicProfilePage.tsx`, `SwipeMatchPage.tsx`, `ProductDetailPage.tsx`
+  (bu sonuncusu önceden hardcoded `/mesajlar/chat-1`'e yönlendiriyordu,
+  artık gerçek `getOrCreateConversationWithUser` çağrısı yapıyor).
+
+**Yapılan mimari kararlar (yeni oturumda hatırlanması gereken):**
+
+1. `Conversation.unreadCount` artık DB'den `count` sorgusuyla hesaplanıyor
+   (`is_read = false and sender_id <> currentUserId`) — mock veride sabit
+   bir sayıydı.
+2. `getOrCreateConversationWithUser` yarış durumuna karşı korumalı: insert
+   unique constraint'e takılırsa (iki istek aynı anda aynı çifti açmaya
+   çalışırsa), satırı tekrar okuyup mevcut olanı döndürüyor.
+3. Mesaj gönderiminde `sender` bilgisini `profiles` join'i ile çekiyoruz
+   (`senderName`/`senderAvatar` UI alanları için) — tradeService.ts'teki
+   `mapProfile` fonksiyonu tekrar kullanıldı (zaten `export` edilmişti).
+4. `src/data/mockData.ts` içindeki `INITIAL_CONVERSATIONS` /
+   `INITIAL_MESSAGES` export'ları artık hiçbir yerde kullanılmıyor —
+   derlemeyi bozmuyor ama isterseniz temizlik için silinebilir.
+
+**Test kısıtı (plan §5.4 ile aynı sebep):** Bu ortamdan gerçek Supabase'e ağ
+erişimi yok, sadece `tsc --noEmit` + `vite build` ile derleme doğrulandı.
+**RLS politikalarının ve `conversations_unique_pair_idx`'in gerçek DB'de
+beklendiği gibi çalışıp çalışmadığı test edilmedi.**
+
+**Yeni oturumda ilk yapılması gereken (kullanıcı kendi ortamında test
+edecek):**
+
+1. Önce migration'ı canlıya uygulayın: `supabase db push` (veya CLI ile
+   projeye login olup ilgili komut). Push edilmeden önce
+   `20260818140000_create_messaging_tables.sql` dosyasını gözden geçirmeniz
+   önerilir — özellikle RLS politikaları sizin güvenlik gereksinimlerinize
+   uygun mu diye.
+2. `npm run dev` ile uçtan uca test: bir ilan sayfasından "Mesaj Gönder"e
+   basın → konuşma açılmalı → mesaj yazıp gönderin → karşı hesapla (ikinci
+   bir test kullanıcısıyla) giriş yapıp mesajı görün, okundu işaretlensin
+   mi kontrol edin.
+3. Hata alınırsa önce migration'ın gerçekten push edildiğini, sonra RLS
+   politikalarını kontrol edin.
+4. Test başarılıysa §6 madde 2'ye (gerçek fotoğraf yükleme) geçilebilir.

@@ -1,8 +1,11 @@
 import { Category, CategoryId, Badge, PaperclipStage } from '../types';
 
+// NOT: Bu liste artık canlı Supabase `categories` tablosuyla birebir
+// eşleşiyor (id = DB slug, name = Türkçe görünen isim). Detaylar için
+// src/types/index.ts'teki CategoryId açıklamasına bakın.
 export const CATEGORIES: Category[] = [
   {
-    id: 'elektronik',
+    id: 'electronics',
     name: 'Elektronik',
     iconName: 'Laptop',
     color: '#059669', // emerald
@@ -11,7 +14,7 @@ export const CATEGORIES: Category[] = [
     avgWaterSavings: 380,
   },
   {
-    id: 'spor',
+    id: 'sports',
     name: 'Spor & Outdoor',
     iconName: 'Bike',
     color: '#d97706', // amber
@@ -20,7 +23,7 @@ export const CATEGORIES: Category[] = [
     avgWaterSavings: 240,
   },
   {
-    id: 'ev_yasam',
+    id: 'home-living',
     name: 'Ev & Yaşam',
     iconName: 'Home',
     color: '#047857',
@@ -29,7 +32,7 @@ export const CATEGORIES: Category[] = [
     avgWaterSavings: 190,
   },
   {
-    id: 'moda',
+    id: 'fashion',
     name: 'Giyim & Moda',
     iconName: 'Shirt',
     color: '#b45309',
@@ -38,7 +41,7 @@ export const CATEGORIES: Category[] = [
     avgWaterSavings: 850,
   },
   {
-    id: 'hobi',
+    id: 'hobby',
     name: 'Hobi & Oyun',
     iconName: 'Gamepad2',
     color: '#10b981',
@@ -47,34 +50,43 @@ export const CATEGORIES: Category[] = [
     avgWaterSavings: 120,
   },
   {
-    id: 'kitap_muzik',
-    name: 'Kitap & Müzik',
+    id: 'books',
+    name: 'Kitap',
     iconName: 'BookOpen',
     color: '#059669',
-    itemCount: 395,
+    itemCount: 260,
     avgCo2Savings: 3.1,
     avgWaterSavings: 95,
   },
   {
-    id: 'bebek_cocuk',
-    name: 'Bebek & Çocuk',
-    iconName: 'Baby',
-    color: '#f59e0b',
-    itemCount: 184,
-    avgCo2Savings: 5.6,
-    avgWaterSavings: 310,
+    id: 'music',
+    name: 'Müzik',
+    iconName: 'Music',
+    color: '#0d9488',
+    itemCount: 135,
+    avgCo2Savings: 3.6,
+    avgWaterSavings: 80,
   },
   {
-    id: 'arac_parca',
-    name: 'Araç & Parça',
-    iconName: 'Car',
-    color: '#065f46',
-    itemCount: 142,
-    avgCo2Savings: 18.2,
-    avgWaterSavings: 450,
+    id: 'photography',
+    name: 'Fotoğraf',
+    iconName: 'Camera',
+    color: '#7c3aed',
+    itemCount: 98,
+    avgCo2Savings: 12.1,
+    avgWaterSavings: 260,
   },
   {
-    id: 'diger',
+    id: 'collectibles',
+    name: 'Koleksiyon',
+    iconName: 'Sparkles',
+    color: '#db2777',
+    itemCount: 121,
+    avgCo2Savings: 4.2,
+    avgWaterSavings: 110,
+  },
+  {
+    id: 'other',
     name: 'Diğer',
     iconName: 'Package',
     color: '#78716c',

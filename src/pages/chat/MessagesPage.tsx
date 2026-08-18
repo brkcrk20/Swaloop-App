@@ -21,34 +21,81 @@ export const MessagesPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, showToast } = useApp();
 
-  const [conversations, setConversations] = useState<Conversation[]>(() => messageService.getConversations());
-  const [selectedConvId, setSelectedConvId] = useState<string | undefined>(id || (conversations[0]?.id));
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoadingConvs, setIsLoadingConvs] = useState(true);
+  const [selectedConvId, setSelectedConvId] = useState<string | undefined>(id);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [inputText, setInputText] = useState('');
 
   const activeConv = conversations.find((c) => c.id === selectedConvId) || conversations[0];
 
+  const refreshConversations = React.useCallback(async () => {
+    const convs = await messageService.getConversations(currentUser.id);
+    setConversations(convs);
+    return convs;
+  }, [currentUser.id]);
+
+  // İlk yükleme: konuşma listesini çek. URL'de bir :id varsa onu seçili yap,
+  // yoksa listedeki ilk konuşmayı seç.
   useEffect(() => {
-    if (activeConv) {
-      setMessages(messageService.getMessages(activeConv.id));
+    let cancelled = false;
+    setIsLoadingConvs(true);
+    refreshConversations().then((convs) => {
+      if (cancelled) return;
+      setIsLoadingConvs(false);
+      if (!selectedConvId) {
+        setSelectedConvId(id || convs[0]?.id);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    if (!activeConv) {
+      setMessages([]);
+      return;
     }
-  }, [selectedConvId, activeConv]);
+    let cancelled = false;
+    setIsLoadingMessages(true);
+    messageService.getMessages(activeConv.id).then((msgs) => {
+      if (cancelled) return;
+      setMessages(msgs);
+      setIsLoadingMessages(false);
+    });
+    messageService.markConversationRead(activeConv.id, currentUser.id);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedConvId, activeConv, currentUser.id]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !activeConv) return;
+    const text = inputText.trim();
+    if (!text || !activeConv) return;
 
-    const newMsg = messageService.sendMessage(activeConv.id, inputText.trim(), 'text');
-    setMessages([...messages, newMsg]);
     setInputText('');
-    setConversations(messageService.getConversations());
+    const newMsg = await messageService.sendMessage(activeConv.id, currentUser.id, text, 'text');
+    if (newMsg) {
+      setMessages((prev) => [...prev, newMsg]);
+      refreshConversations();
+    } else {
+      showToast('Mesaj gönderilemedi', 'Lütfen tekrar deneyin.', 'error');
+    }
   };
 
-  const sendQuickTemplate = (text: string) => {
+  const sendQuickTemplate = async (text: string) => {
     if (!activeConv) return;
-    const newMsg = messageService.sendMessage(activeConv.id, text, 'text');
-    setMessages([...messages, newMsg]);
-    setConversations(messageService.getConversations());
+    const newMsg = await messageService.sendMessage(activeConv.id, currentUser.id, text, 'text');
+    if (newMsg) {
+      setMessages((prev) => [...prev, newMsg]);
+      refreshConversations();
+    } else {
+      showToast('Mesaj gönderilemedi', 'Lütfen tekrar deneyin.', 'error');
+    }
   };
 
   return (
@@ -67,6 +114,12 @@ export const MessagesPage: React.FC = () => {
             </div>
 
             <div className="overflow-y-auto flex-1 divide-y divide-stone-100">
+              {isLoadingConvs && (
+                <div className="p-6 text-center text-xs text-stone-400">Sohbetler yükleniyor...</div>
+              )}
+              {!isLoadingConvs && conversations.length === 0 && (
+                <div className="p-6 text-center text-xs text-stone-400">Henüz bir sohbetiniz yok.</div>
+              )}
               {conversations.map((conv) => {
                 const isSelected = conv.id === selectedConvId;
                 return (
@@ -170,6 +223,9 @@ export const MessagesPage: React.FC = () => {
 
               {/* Messages Feed */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                {isLoadingMessages && (
+                  <div className="text-center text-xs text-stone-400 py-4">Mesajlar yükleniyor...</div>
+                )}
                 {messages.map((msg) => {
                   const isMe = msg.senderId === currentUser.id;
 

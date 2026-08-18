@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { listingService } from '../../services/listingService';
+import { messageService } from '../../services/messageService';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import { TrustCard } from '../../components/common/TrustCard';
 import { Listing } from '../../types';
@@ -23,7 +24,7 @@ import { useApp } from '../../context/AppContext';
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { showToast } = useApp();
+  const { currentUser, showToast } = useApp();
 
   const [listing, setListing] = useState<Listing | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
@@ -305,7 +306,19 @@ export const ProductDetailPage: React.FC = () => {
         <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => navigate(`/mesajlar/chat-1`)}
+            onClick={async () => {
+              if (!listing) return;
+              const conv = await messageService.getOrCreateConversationWithUser(
+                currentUser.id,
+                listing.user.id,
+                listing.id
+              );
+              if (conv) {
+                navigate(`/mesajlar/${conv.id}`);
+              } else {
+                showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
+              }
+            }}
             className="flex-1 py-3 sm:py-3.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer whitespace-nowrap"
           >
             <MessageSquare className="w-4 h-4 shrink-0" />

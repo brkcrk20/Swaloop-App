@@ -66,6 +66,65 @@ export type Database = {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          active_trade_offer_id: string | null
+          created_at: string
+          id: string
+          participant_one_id: string
+          participant_two_id: string
+          related_listing_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active_trade_offer_id?: string | null
+          created_at?: string
+          id?: string
+          participant_one_id: string
+          participant_two_id: string
+          related_listing_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active_trade_offer_id?: string | null
+          created_at?: string
+          id?: string
+          participant_one_id?: string
+          participant_two_id?: string
+          related_listing_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_active_trade_offer_id_fkey"
+            columns: ["active_trade_offer_id"]
+            isOneToOne: false
+            referencedRelation: "trade_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_one_id_fkey"
+            columns: ["participant_one_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_two_id_fkey"
+            columns: ["participant_two_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_related_listing_id_fkey"
+            columns: ["related_listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string
@@ -332,6 +391,61 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          sender_id: string
+          trade_offer_id: string | null
+          type: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id: string
+          trade_offer_id?: string | null
+          type?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id?: string
+          trade_offer_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_trade_offer_id_fkey"
+            columns: ["trade_offer_id"]
+            isOneToOne: false
+            referencedRelation: "trade_offers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

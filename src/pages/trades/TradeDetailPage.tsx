@@ -124,9 +124,13 @@ export const TradeDetailPage: React.FC = () => {
     }
   };
 
-  const handleChatOpen = () => {
-    const conv = messageService.getOrCreateConversationWithUser(otherUser.id);
-    navigate(`/mesajlar/${conv.id}`);
+  const handleChatOpen = async () => {
+    const conv = await messageService.getOrCreateConversationWithUser(currentUser.id, otherUser.id);
+    if (conv) {
+      navigate(`/mesajlar/${conv.id}`);
+    } else {
+      showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
+    }
   };
 
   const handleSubmitReview = async (e: React.FormEvent) => {

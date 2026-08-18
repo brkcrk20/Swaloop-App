@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
+import { messageService } from '../../services/messageService';
 import { Listing } from '../../types';
 import { CATEGORIES } from '../../constants';
 import {
@@ -518,9 +519,15 @@ export const SwipeMatchPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  const targetUserId = matchedItem.targetListing.user.id;
                   setMatchedItem(null);
-                  navigate(`/mesajlar/${matchedItem.targetListing.user.id}`);
+                  const conv = await messageService.getOrCreateConversationWithUser(currentUser.id, targetUserId);
+                  if (conv) {
+                    navigate(`/mesajlar/${conv.id}`);
+                  } else {
+                    showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
+                  }
                 }}
                 className="w-full py-3 rounded-2xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-stone-700"
               >

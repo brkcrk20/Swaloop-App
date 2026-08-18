@@ -1,16 +1,26 @@
 export type ListingCondition = 'zero' | 'like_new' | 'very_good' | 'good' | 'acceptable';
 export type ProductCondition = ListingCondition;
 
+// NOT: Bu id'ler artık doğrudan canlı Supabase `categories` tablosundaki
+// `slug` sütunuyla birebir aynı (bkz. swaloop-devam-plani.md §7). Önceden
+// burada Türkçe id'ler vardı (`elektronik`, `ev_yasam`, `arac_parca`,
+// `kitap_muzik`, `bebek_cocuk`, `diger`) ama DB'deki gerçek slug'lar
+// İngilizce ve farklı bir kategori kümesiydi (`arac_parca`/`kitap_muzik`/
+// `bebek_cocuk` DB'de hiç yok; DB'de ayrıca `photography`/`collectibles`
+// var ama frontend'de hiç yoktu). İlan oluşturma bu yüzden "Geçersiz
+// kategori" hatası veriyordu — bkz. `listingService.ts` `getCategoryUuid`.
+// Artık id = DB slug olduğu için ayrı bir çeviri katmanına gerek yok.
 export type CategoryId =
-  | 'elektronik'
-  | 'ev_yasam'
-  | 'spor'
-  | 'moda'
-  | 'hobi'
-  | 'arac_parca'
-  | 'kitap_muzik'
-  | 'bebek_cocuk'
-  | 'diger';
+  | 'electronics'
+  | 'home-living'
+  | 'sports'
+  | 'fashion'
+  | 'hobby'
+  | 'books'
+  | 'music'
+  | 'photography'
+  | 'collectibles'
+  | 'other';
 
 export interface Category {
   id: CategoryId;

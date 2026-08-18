@@ -26,7 +26,7 @@ export const CreateListingPage: React.FC = () => {
 
   // Form State
   const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState<CategoryId>('elektronik');
+  const [categoryId, setCategoryId] = useState<CategoryId>('electronics');
   const [description, setDescription] = useState('');
   const [images, setImages] = useState<string[]>([
     'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=600&auto=format&fit=crop&q=80',

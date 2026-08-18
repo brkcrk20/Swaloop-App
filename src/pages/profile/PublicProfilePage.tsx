@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
 import { messageService } from '../../services/messageService';
@@ -13,6 +14,7 @@ export const PublicProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const { currentUser, showToast } = useApp();
   const user = id && OTHER_USERS[id] ? OTHER_USERS[id] : Object.values(OTHER_USERS)[0];
   const [userListings, setUserListings] = useState<Listing[]>([]);
   const [userReviews, setUserReviews] = useState<Review[]>([]);
@@ -22,9 +24,13 @@ export const PublicProfilePage: React.FC = () => {
     tradeService.getReviewsForUser(user.id).then(setUserReviews);
   }, [user.id]);
 
-  const handleStartChat = () => {
-    const conv = messageService.getOrCreateConversationWithUser(user.id);
-    navigate(`/mesajlar/${conv.id}`);
+  const handleStartChat = async () => {
+    const conv = await messageService.getOrCreateConversationWithUser(currentUser.id, user.id);
+    if (conv) {
+      navigate(`/mesajlar/${conv.id}`);
+    } else {
+      showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
+    }
   };
 
   return (

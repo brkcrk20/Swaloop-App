@@ -12,15 +12,16 @@ const CATEGORY_IMPACT_FACTORS: Record<
     wasteKg: number;
   }
 > = {
-  elektronik: { co2Kg: 14.5, waterL: 380, energyKwh: 52, rawMaterialKg: 2.1, wasteKg: 1.2 },
-  spor: { co2Kg: 11.2, waterL: 290, energyKwh: 40, rawMaterialKg: 3.4, wasteKg: 8.5 },
-  ev_yasam: { co2Kg: 8.5, waterL: 210, energyKwh: 34, rawMaterialKg: 2.6, wasteKg: 4.2 },
-  moda: { co2Kg: 7.8, waterL: 920, energyKwh: 22, rawMaterialKg: 1.4, wasteKg: 0.8 },
-  hobi: { co2Kg: 5.6, waterL: 140, energyKwh: 28, rawMaterialKg: 1.8, wasteKg: 1.5 },
-  kitap_muzik: { co2Kg: 3.4, waterL: 110, energyKwh: 14, rawMaterialKg: 1.1, wasteKg: 0.9 },
-  bebek_cocuk: { co2Kg: 6.2, waterL: 340, energyKwh: 24, rawMaterialKg: 1.5, wasteKg: 1.8 },
-  arac_parca: { co2Kg: 19.4, waterL: 490, energyKwh: 78, rawMaterialKg: 6.2, wasteKg: 7.5 },
-  diger: { co2Kg: 5.0, waterL: 150, energyKwh: 20, rawMaterialKg: 1.0, wasteKg: 1.0 },
+  electronics: { co2Kg: 14.5, waterL: 380, energyKwh: 52, rawMaterialKg: 2.1, wasteKg: 1.2 },
+  sports: { co2Kg: 11.2, waterL: 290, energyKwh: 40, rawMaterialKg: 3.4, wasteKg: 8.5 },
+  'home-living': { co2Kg: 8.5, waterL: 210, energyKwh: 34, rawMaterialKg: 2.6, wasteKg: 4.2 },
+  fashion: { co2Kg: 7.8, waterL: 920, energyKwh: 22, rawMaterialKg: 1.4, wasteKg: 0.8 },
+  hobby: { co2Kg: 5.6, waterL: 140, energyKwh: 28, rawMaterialKg: 1.8, wasteKg: 1.5 },
+  books: { co2Kg: 3.4, waterL: 110, energyKwh: 14, rawMaterialKg: 1.1, wasteKg: 0.9 },
+  music: { co2Kg: 3.8, waterL: 130, energyKwh: 18, rawMaterialKg: 1.3, wasteKg: 0.9 },
+  photography: { co2Kg: 12.8, waterL: 340, energyKwh: 48, rawMaterialKg: 2.4, wasteKg: 1.4 },
+  collectibles: { co2Kg: 4.4, waterL: 120, energyKwh: 16, rawMaterialKg: 1.0, wasteKg: 0.7 },
+  other: { co2Kg: 5.0, waterL: 150, energyKwh: 20, rawMaterialKg: 1.0, wasteKg: 1.0 },
 };
 
 const CONDITION_MULTIPLIERS: Record<ListingCondition, number> = {
@@ -41,7 +42,7 @@ export const impactService = {
     condition: ListingCondition = 'very_good',
     weightModifier: number = 1.0
   ): EnvironmentalImpact {
-    const base = CATEGORY_IMPACT_FACTORS[categoryId] || CATEGORY_IMPACT_FACTORS.diger;
+    const base = CATEGORY_IMPACT_FACTORS[categoryId] || CATEGORY_IMPACT_FACTORS.other;
     const mult = (CONDITION_MULTIPLIERS[condition] || 1.0) * weightModifier;
 
     return {
