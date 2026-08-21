@@ -195,6 +195,9 @@ export const CreateListingPage: React.FC = () => {
       },
       user: {
         id: currentUser.id,
+        reviewCount: currentUser.trustProfile.reviewCount,
+        averageRating: currentUser.trustProfile.averageRating,
+        completedTrades: currentUser.trustProfile.successfulTradesCount,
         fullName: currentUser.fullName,
         avatarUrl: currentUser.avatarUrl,
         trustScore: currentUser.trustProfile.score,

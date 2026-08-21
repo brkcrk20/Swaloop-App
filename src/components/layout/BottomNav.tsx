@@ -6,7 +6,7 @@ import { useApp } from '../../context/AppContext';
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useApp();
+  const { t, unreadMessageCount } = useApp();
 
   const isAuthPage =
     location.pathname === '/' ||
@@ -54,7 +54,7 @@ export const BottomNav: React.FC = () => {
       label: t('action_send_message') === 'Send Message' ? 'Messages' : 'Mesajlar',
       icon: MessageSquare,
       path: '/mesajlar',
-      badgeCount: 1,
+      badgeCount: unreadMessageCount,
       activeCheck: (p: string) => p.startsWith('/mesaj'),
     },
     {

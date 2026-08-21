@@ -18,24 +18,28 @@ export const TrustCard: React.FC<TrustCardProps> = ({
   variant = 'full',
 }) => {
   const profileData = rawTrustProfile || rawProfile;
+  // Varsayılanlar bilerek NÖTR. Önceden bu blok veri gelmediğinde 4.8 puan,
+  // 14 başarılı takas, 12 değerlendirme ve "Zamanında Teslim" gibi övgüler
+  // uyduruyordu — yani veri yokluğu, iyi bir sicil gibi görünüyordu. Güven
+  // göstergesi üreten bir üründe bu, olmamasından kötüdür.
   const trustProfile: TrustProfile = {
-    score: profileData?.score ?? 4.8,
-    level: profileData?.level ?? 'Doğrulanmış Üye',
+    score: profileData?.score ?? 3,
+    level: profileData?.level ?? 'Başlangıç',
     phoneVerified: profileData?.phoneVerified ?? true,
     idVerified: profileData?.idVerified ?? false,
-    successfulTradesCount: profileData?.successfulTradesCount ?? 14,
-    cancellationRate: profileData?.cancellationRate ?? 0.02,
-    responseRate: profileData?.responseRate ?? 0.98,
-    averageRating: profileData?.averageRating ?? 4.9,
-    reviewCount: profileData?.reviewCount ?? 12,
+    successfulTradesCount: profileData?.successfulTradesCount ?? 0,
+    cancellationRate: profileData?.cancellationRate ?? 0,
+    responseRate: profileData?.responseRate ?? 1,
+    averageRating: profileData?.averageRating ?? 0,
+    reviewCount: profileData?.reviewCount ?? 0,
     reportCount: profileData?.reportCount ?? 0,
-    accountAgeDays: profileData?.accountAgeDays ?? 120,
-    positiveHighlights: profileData?.positiveHighlights ?? [
-      'Zamanında Teslim',
-      'Ürün Açıklamayla Uyumlu',
-      'Hızlı İletişim',
-    ],
+    accountAgeDays: profileData?.accountAgeDays ?? 1,
+    positiveHighlights: profileData?.positiveHighlights ?? [],
   };
+
+  // Hiç değerlendirme yoksa ortalama puan göstermek yanıltıcı olur:
+  // "0.0 puan" ile "henüz puanlanmamış" farklı şeylerdir.
+  const hasReviews = trustProfile.reviewCount > 0;
   if (variant === 'compact') {
     return (
       <div
@@ -73,14 +77,33 @@ export const TrustCard: React.FC<TrustCardProps> = ({
             {trustProfile.score.toFixed(2)}
             <span className="text-xs text-stone-400 font-normal"> / 5.0</span>
           </div>
-          <div className="flex items-center gap-0.5 justify-end text-amber-400">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className="w-3 h-3 fill-current"
-              />
-            ))}
-          </div>
+          {/* Yıldız sırası önceden puandan bağımsız olarak HER ZAMAN 5 dolu
+              yıldız çiziyordu. Artık gerçek ortalamayı yansıtıyor; hiç
+              değerlendirme yoksa yıldız yerine bunu söyleyen bir etiket
+              gösteriliyor. */}
+          {hasReviews ? (
+            <div
+              className="flex items-center gap-0.5 justify-end text-amber-400"
+              aria-label={`${trustProfile.averageRating.toFixed(1)} / 5 ortalama puan, ${trustProfile.reviewCount} değerlendirme`}
+            >
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  aria-hidden="true"
+                  className={`w-3 h-3 ${
+                    i < Math.round(trustProfile.averageRating)
+                      ? 'fill-current'
+                      : 'text-stone-300'
+                  }`}
+                />
+              ))}
+              <span className="ml-1 text-[10px] text-stone-500 font-normal">
+                ({trustProfile.reviewCount})
+              </span>
+            </div>
+          ) : (
+            <span className="text-[10px] text-stone-400">Henüz değerlendirme yok</span>
+          )}
         </div>
       </div>
 

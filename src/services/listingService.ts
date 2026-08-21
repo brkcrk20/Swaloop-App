@@ -14,6 +14,30 @@ const DEFAULT_IMAGE =
 const LISTING_IMAGES_BUCKET = 'listing-images';
 
 /**
+ * Varsayılan sayfa boyutu.
+ *
+ * Önceden hiçbir listede sayfalama yoktu: getAllListings / searchListings /
+ * getAllTrades eşleşen TÜM satırları çekiyordu. supabase/config.toml içinde
+ * `max_rows = 1000` tanımlı olduğu için, veri büyüdüğünde sonuçlar hata
+ * vermeden sessizce kesilmeye başlayacaktı (bkz. denetim bulgusu D-02).
+ */
+export const DEFAULT_PAGE_SIZE = 24;
+
+export interface PageOptions {
+  /** 0'dan başlar. */
+  page?: number;
+  pageSize?: number;
+}
+
+function applyRange<T>(request: T, options?: PageOptions): T {
+  const page = options?.page ?? 0;
+  const size = options?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const from = page * size;
+
+  return (request as any).range(from, from + size - 1) as T;
+}
+
+/**
  * İlan sorgularında kullanılan ortak select.
  *
  * Profil join'i artık `profiles(*)` DEĞİL: açık kolon listesi. `profiles`
@@ -168,6 +192,12 @@ const DEFAULT_AVATAR =
 function mapListing(row: any): Listing {
   const categoryId = row.category_slug ?? row.category_id;
 
+  const trustSummary = row.owner_trust_summary ?? {
+    reviewCount: 0,
+    averageRating: 0,
+    completedTrades: 0,
+  };
+
   const estimatedImpact =
     impactService.calculateListingImpact(
       categoryId as CategoryId,
@@ -192,6 +222,7 @@ function mapListing(row: any): Listing {
         // Önceden sabit `true` idi: her ilan sahibi doğrulanmış rozetiyle
         // görünüyordu. Artık trust_profiles.verification_level'dan geliyor.
         isVerified: row.owner_is_verified ?? false,
+        ...trustSummary,
       }
     : {
         id: row.owner_id,
@@ -201,6 +232,7 @@ function mapListing(row: any): Listing {
         city: row.city ?? '',
         district: row.district ?? '',
         isVerified: false,
+        ...trustSummary,
       };
 
   return {
@@ -289,11 +321,18 @@ export async function enrichListings(rows: any[]): Promise<Listing[]> {
 
   let trustScoreMap = new Map<string, number>();
   let verifiedMap = new Map<string, boolean>();
+  // Değerlendirme özeti de aynı sorgudan taşınıyor: ilan kartları ve ürün
+  // detayındaki TrustCard önceden bu sayıları uyduruyordu (sabit 14 takas,
+  // 12 değerlendirme, 4.9 ortalama).
+  let trustSummaryMap = new Map<
+    string,
+    { reviewCount: number; averageRating: number; completedTrades: number }
+  >();
 
   if (ownerIds.length) {
     const { data: trustRows } = await supabase
       .from('trust_profiles')
-      .select('user_id, trust_score, verification_level')
+      .select('user_id, trust_score, verification_level, review_count, average_rating, completed_trades')
       .in('user_id', ownerIds);
 
     for (const t of trustRows ?? []) {
@@ -302,6 +341,11 @@ export async function enrichListings(rows: any[]): Promise<Listing[]> {
       }
       if (t.user_id != null) {
         verifiedMap.set(t.user_id, t.verification_level === 'id_verified');
+        trustSummaryMap.set(t.user_id, {
+          reviewCount: t.review_count ?? 0,
+          averageRating: Number(t.average_rating ?? 0),
+          completedTrades: t.completed_trades ?? 0,
+        });
       }
     }
   }
@@ -312,17 +356,20 @@ export async function enrichListings(rows: any[]): Promise<Listing[]> {
       categoryMap.get(row.category_id) ?? row.category_id,
     owner_trust_score: trustScoreMap.get(row.owner_id) ?? 5,
     owner_is_verified: verifiedMap.get(row.owner_id) ?? false,
+    owner_trust_summary: trustSummaryMap.get(row.owner_id) ?? null,
   })).map(mapListing);
 }
 
 export const listingService = {
-  async getAllListings(): Promise<Listing[]> {
-    // BURASI GÜNCELLENDİ: İlanla birlikte profil ve fotoğrafları da çekiyoruz
-    const { data, error } = await supabase
-      .from('listings')
-      .select(LISTING_SELECT)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
+  async getAllListings(options?: PageOptions): Promise<Listing[]> {
+    const { data, error } = await applyRange(
+      supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false }),
+      options
+    );
 
     if (error) {
       console.error('Listings alınamadı:', error);
@@ -596,6 +643,24 @@ export const listingService = {
     return true;
   },
 
+  /**
+   * İlan detayı açıldığında görüntülenme sayacını artırır.
+   *
+   * İstemciden doğrudan UPDATE verilmiyor (RLS zaten izin vermezdi): sayaç
+   * `increment_listing_view` RPC'si üzerinden artıyor ve kendi ilanına
+   * bakmak sayacı artırmıyor.
+   */
+  async incrementView(listingId: string): Promise<void> {
+    const { error } = await supabase.rpc('increment_listing_view', {
+      p_listing_id: listingId,
+    });
+
+    if (error) {
+      // Sayaç kritik değil: hata kullanıcıya gösterilmez, akış kesilmez.
+      console.warn('Görüntülenme sayacı artırılamadı:', error);
+    }
+  },
+
   async toggleFavorite(
     id: string
   ): Promise<boolean> {
@@ -719,7 +784,8 @@ export const listingService = {
     query: string,
     categoryId?: string,
     condition?: string,
-    maxDistance?: number
+    maxDistance?: number,
+    options?: PageOptions
   ): Promise<Listing[]> {
     // BURASI GÜNCELLENDİ
     let request = supabase
@@ -773,7 +839,7 @@ export const listingService = {
     const {
       data,
       error,
-    } = await request;
+    } = await applyRange(request, options);
 
     if (error) {
       console.error(

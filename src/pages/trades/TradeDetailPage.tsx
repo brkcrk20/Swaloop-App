@@ -125,6 +125,33 @@ export const TradeDetailPage: React.FC = () => {
     }
   };
 
+  /**
+   * Kabul edilmiş ama tamamlanmamış bir takası iptal eder.
+   *
+   * Bu buton, ilan kilitlemesinin (C-02) zorunlu tamamlayıcısı: kilitleme
+   * varken iptal yolu olmazsa, yarım kalan her takasın ürünleri kalıcı
+   * olarak dolaşımdan çıkardı. İptal, güven puanına iptal oranı olarak
+   * yansır — bu yüzden kullanıcıdan açık onay isteniyor.
+   */
+  const handleCancel = async () => {
+    const reason = window.prompt(
+      'Takası iptal etmek istediğinize emin misiniz?\n\n' +
+        'Ürünler yeniden takasa açılacak ve iptal, güven puanınıza yansıyacak.\n\n' +
+        'İptal gerekçesi (isteğe bağlı):'
+    );
+
+    if (reason === null) return;
+
+    const updated = await tradeService.cancelTrade(trade.id, reason || undefined);
+
+    if (updated) {
+      setTrade(updated);
+      showToast('Takas İptal Edildi', 'Ürünler yeniden takasa açıldı.', 'info');
+    } else {
+      showToast('Takas iptal edilemedi', 'Lütfen tekrar deneyin.', 'error');
+    }
+  };
+
   const handleChatOpen = async () => {
     const conv = await messageService.getOrCreateConversationWithUser(currentUser.id, otherUser.id);
     if (conv) {
@@ -434,6 +461,27 @@ export const TradeDetailPage: React.FC = () => {
                 <Sparkles className="w-4 h-4" />
                 <span>Takası Başarıyla Tamamla</span>
               </button>
+            </div>
+          )}
+
+          {/* Devam eden takaslar için çıkış yolu */}
+          {(trade.status === 'locked' ||
+            trade.status === 'delivery_planned' ||
+            trade.status === 'verified') && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              aria-label="Takası iptal et"
+              className="w-full py-2 mt-1 rounded-xl border border-stone-300 text-stone-600 hover:bg-stone-100 hover:text-stone-800 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Takası İptal Et
+            </button>
+          )}
+
+          {/* Cancelled state */}
+          {trade.status === 'cancelled' && (
+            <div className="p-3 bg-stone-100 rounded-xl border border-stone-200 text-xs text-stone-700">
+              Bu takas iptal edildi. Ürünler yeniden takasa açıldı.
             </div>
           )}
 

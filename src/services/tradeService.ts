@@ -34,6 +34,7 @@ type TradeOfferRow = {
   sender?: any;
   receiver?: any;
   items?: TradeOfferItemRow[];
+  trade?: TradeRow | TradeRow[] | null;
 };
 
 type TradeOfferItemRow = {
@@ -56,6 +57,8 @@ type TradeRow = {
   delivery_notes: string | null;
   started_at: string;
   completed_at: string | null;
+  events?: TradeEventRow[];
+  reviews?: { reviewer_id: string }[];
 };
 
 type TradeEventRow = {
@@ -72,8 +75,15 @@ type TradeEventRow = {
 // iniyordu. mapProfile() eksik alanlar için zaten güvenli varsayılanlar üretir.
 const PROFILE_COLS = 'id, full_name, avatar_url, city, district, bio, created_at';
 
+// Takas kaydı, olay günlüğü ve değerlendirmeler artık AYRI sorgularla değil,
+// bu tek select içinde iç içe çekiliyor.
+//
+// Önceden her teklif için sırayla trades, trade_events, reviews sorguları ve
+// iki ayrı enrichListings çağrısı (her biri 2 sorgu daha) yapılıyordu —
+// teklif başına ~7 istek. 50 teklifli bir listede 350'den fazla ağ isteği
+// demekti (bkz. denetim bulgusu D-01).
 const OFFER_SELECT =
-  `*, sender:profiles!trade_offers_sender_id_fkey(${PROFILE_COLS}), receiver:profiles!trade_offers_receiver_id_fkey(${PROFILE_COLS}), items:trade_offer_items(*, listing:listings(*, user:profiles(${PROFILE_COLS}), images:listing_images(storage_path)))`;
+  `*, sender:profiles!trade_offers_sender_id_fkey(${PROFILE_COLS}), receiver:profiles!trade_offers_receiver_id_fkey(${PROFILE_COLS}), items:trade_offer_items(*, listing:listings(*, user:profiles(${PROFILE_COLS}), images:listing_images(storage_path))), trade:trades(*, events:trade_events(*), reviews(reviewer_id))`;
 
 function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return 'Bekleniyor';
@@ -83,23 +93,29 @@ function fmtDateTime(iso: string | null | undefined): string {
   });
 }
 
-async function hydrateOffer(
+function hydrateOffer(
   offerRow: TradeOfferRow,
   tradeRow: TradeRow | null,
-  events: TradeEventRow[]
-): Promise<TradeOffer> {
+  events: TradeEventRow[],
+  listingsById: Map<string, Listing>
+): TradeOffer {
   const initiator = mapProfile(offerRow.sender);
   const receiver = mapProfile(offerRow.receiver);
 
   const offeredItemRows = (offerRow.items ?? []).filter((i) => i.role === 'offered');
   const requestedItemRows = (offerRow.items ?? []).filter((i) => i.role === 'requested');
 
-  const offeredListings = await enrichListings(
-    offeredItemRows.map((i) => i.listing).filter(Boolean)
-  );
-  const requestedListings = await enrichListings(
-    requestedItemRows.map((i) => i.listing).filter(Boolean)
-  );
+  // İlanlar tüm teklifler için TEK seferde zenginleştirilip haritaya
+  // konuyor (bkz. hydrateOffers); burada yalnızca haritadan okunuyor.
+  const pick = (rows: TradeOfferItemRow[]) =>
+    rows
+      .map((i) => listingsById.get(i.listing_id))
+      .filter((l): l is Listing => Boolean(l));
+
+  const offeredListings = pick(offeredItemRows);
+  const requestedListings = pick(requestedItemRows);
+
+  const reviewerIds: string[] = (tradeRow?.reviews ?? []).map((r) => r.reviewer_id);
 
   const combinedImpact = impactService.calculateCombinedTradeImpact([
     ...offeredListings.map((l) => l.estimatedImpact),
@@ -226,17 +242,37 @@ async function hydrateOffer(
     counterOfferFromId: offerRow.parent_offer_id ?? undefined,
     timeline,
     combinedImpact,
-    // DB tarafında review'ların hangi teklife ait olduğunu görmek için ayrı
-    // bir sorgu gerekiyor; bu iki alan getTradeById içinde ayrıca dolduruluyor.
-    isReviewedByInitiator: undefined,
-    isReviewedByReceiver: undefined,
+    // Değerlendirme bayrakları artık ayrı bir sorgu gerektirmiyor: reviewer
+    // kimlikleri OFFER_SELECT içinde trades altına gömülü geliyor.
+    isReviewedByInitiator: tradeRow
+      ? reviewerIds.includes(offerRow.sender_id)
+      : undefined,
+    isReviewedByReceiver: tradeRow
+      ? reviewerIds.includes(offerRow.receiver_id)
+      : undefined,
   };
 }
 
-async function fetchTradeRowByOfferId(offerId: string): Promise<TradeRow | null> {
+/**
+ * Bir teklife gömülü gelen `trades` ilişkisini tek satıra indirger.
+ * PostgREST, tekil ilişkileri sürüme göre dizi ya da nesne olarak
+ * döndürebildiği için iki şekle de hazırlıklı davranıyoruz.
+ */
+function pickTradeRow(offerRow: TradeOfferRow): TradeRow | null {
+  const raw = offerRow.trade;
+  if (!raw) return null;
+  return Array.isArray(raw) ? raw[0] ?? null : raw;
+}
+
+/**
+ * Bir teklife bağlı takas kaydının kimliğini getirir.
+ * Yalnızca submitReview için gerekli: reviews.trade_id, teklif kimliğini
+ * değil takas kimliğini bekliyor.
+ */
+async function fetchTradeIdByOfferId(offerId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from('trades')
-    .select('*')
+    .select('id')
     .eq('offer_id', offerId)
     .maybeSingle();
 
@@ -244,67 +280,63 @@ async function fetchTradeRowByOfferId(offerId: string): Promise<TradeRow | null>
     console.error('Trade kaydı alınamadı:', error);
     return null;
   }
-  return data as TradeRow | null;
+
+  return data?.id ?? null;
 }
 
-async function fetchEventsForTrade(tradeId: string | undefined): Promise<TradeEventRow[]> {
-  if (!tradeId) return [];
-  const { data, error } = await supabase
-    .from('trade_events')
-    .select('*')
-    .eq('trade_id', tradeId)
-    .order('created_at', { ascending: true });
+/**
+ * Teklif satırlarını tek seferde TradeOffer nesnelerine dönüştürür.
+ *
+ * Kritik nokta: içerdeki TÜM ilanlar tek bir enrichListings() çağrısıyla
+ * zenginleştiriliyor. Önceki sürümde bu, teklif başına iki kez çağrılıyor ve
+ * her çağrı kategori + güven puanı için ayrı sorgular açıyordu.
+ */
+async function hydrateOffers(offerRows: TradeOfferRow[]): Promise<TradeOffer[]> {
+  if (!offerRows.length) return [];
 
-  if (error) {
-    console.error('Trade eventleri alınamadı:', error);
-    return [];
+  const listingRows: any[] = [];
+  const seen = new Set<string>();
+
+  for (const offer of offerRows) {
+    for (const item of offer.items ?? []) {
+      if (item.listing && !seen.has(item.listing_id)) {
+        seen.add(item.listing_id);
+        listingRows.push(item.listing);
+      }
+    }
   }
-  return (data ?? []) as TradeEventRow[];
-}
 
-async function attachReviewFlags(
-  offer: TradeOffer,
-  tradeId: string | undefined
-): Promise<TradeOffer> {
-  if (!tradeId) return offer;
+  const listings = await enrichListings(listingRows);
+  const listingsById = new Map(listings.map((l) => [l.id, l]));
 
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('reviewer_id')
-    .eq('trade_id', tradeId);
+  return offerRows.map((offerRow) => {
+    const tradeRow = pickTradeRow(offerRow);
+    const events = (tradeRow?.events ?? [])
+      .slice()
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  if (error || !data) return offer;
-
-  return {
-    ...offer,
-    isReviewedByInitiator: data.some((r) => r.reviewer_id === offer.initiatorId),
-    isReviewedByReceiver: data.some((r) => r.reviewer_id === offer.receiverId),
-  };
-}
-
-async function fullyHydrate(offerRow: TradeOfferRow): Promise<TradeOffer> {
-  const tradeRow = await fetchTradeRowByOfferId(offerRow.id);
-  const events = await fetchEventsForTrade(tradeRow?.id);
-  const offer = await hydrateOffer(offerRow, tradeRow, events);
-  return attachReviewFlags(offer, tradeRow?.id);
+    return hydrateOffer(offerRow, tradeRow, events, listingsById);
+  });
 }
 
 export const tradeService = {
-  /**
-   * Admin/genel bakış amaçlı. Büyük veri setlerinde sayfalama eklenmeli.
-   */
-  async getAllTrades(): Promise<TradeOffer[]> {
+  /** Admin/genel bakış amaçlı. Sayfalıdır; varsayılan sayfa boyutu 50. */
+  async getAllTrades(options?: { page?: number; pageSize?: number }): Promise<TradeOffer[]> {
+    const page = options?.page ?? 0;
+    const size = options?.pageSize ?? 50;
+
     const { data, error } = await supabase
       .from('trade_offers')
       .select(OFFER_SELECT)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(page * size, page * size + size - 1);
 
     if (error || !data) {
       console.error('Takas teklifleri alınamadı:', error);
       return [];
     }
 
-    return Promise.all(data.map((row: any) => fullyHydrate(row)));
+    return hydrateOffers(data as any[]);
   },
 
   async getTradeById(id: string): Promise<TradeOffer | undefined> {
@@ -319,7 +351,8 @@ export const tradeService = {
       return undefined;
     }
 
-    return fullyHydrate(data as any);
+    const [offer] = await hydrateOffers([data as any]);
+    return offer;
   },
 
   async getUserIncomingTrades(userId: string): Promise<TradeOffer[]> {
@@ -334,7 +367,7 @@ export const tradeService = {
       return [];
     }
 
-    return Promise.all(data.map((row: any) => fullyHydrate(row)));
+    return hydrateOffers(data as any[]);
   },
 
   async getUserOutgoingTrades(userId: string): Promise<TradeOffer[]> {
@@ -349,7 +382,7 @@ export const tradeService = {
       return [];
     }
 
-    return Promise.all(data.map((row: any) => fullyHydrate(row)));
+    return hydrateOffers(data as any[]);
   },
 
   async createTradeOffer(data: {
@@ -499,15 +532,34 @@ export const tradeService = {
     return this.getTradeById(tradeId);
   },
 
+  /**
+   * Kabul edilmiş ama tamamlanmamış bir takası iptal eder ve kilitli ürünleri
+   * yeniden dolaşıma açar. Bu yol olmadan ilan kilitleme eklenemezdi: yarım
+   * kalan her takasın ürünleri kalıcı olarak dolaşımdan çıkardı.
+   */
+  async cancelTrade(tradeId: string, reason?: string): Promise<TradeOffer | undefined> {
+    const { error } = await supabase.rpc('cancel_trade', {
+      p_offer_id: tradeId,
+      p_reason: reason ?? null,
+    });
+
+    if (error) {
+      console.error('Takas iptal edilemedi:', error);
+      return undefined;
+    }
+
+    return this.getTradeById(tradeId);
+  },
+
   async submitReview(review: Omit<Review, 'id' | 'createdAt'>): Promise<Review | undefined> {
-    const tradeRow = await fetchTradeRowByOfferId(review.tradeId);
-    if (!tradeRow) {
+    const tradeId = await fetchTradeIdByOfferId(review.tradeId);
+    if (!tradeId) {
       console.error('submitReview: bu teklife bağlı bir trade kaydı yok.');
       return undefined;
     }
 
     const insertPayload: TablesInsert<'reviews'> = {
-      trade_id: tradeRow.id,
+      trade_id: tradeId,
       reviewer_id: review.authorId,
       reviewed_user_id: review.targetUserId,
       rating: review.overallRating,

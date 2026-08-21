@@ -33,11 +33,17 @@ export const ProductDetailPage: React.FC = () => {
   const [reportReason, setReportReason] = useState('');
 
   useEffect(() => {
+    if (!id) return;
+
     setIsLoading(true);
-    listingService.getListingById(id || '').then((data) => {
+    listingService.getListingById(id).then((data) => {
       setListing(data);
       setIsLoading(false);
     });
+
+    // Görüntülenme sayacı önceden hiç artmıyordu: kolon okunuyor ve kartlarda
+    // gösteriliyordu ama her ilan sonsuza kadar 0 görüntülenme gösteriyordu.
+    listingService.incrementView(id);
   }, [id]);
 
   if (isLoading) {
@@ -63,6 +69,33 @@ export const ProductDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  /**
+   * İlan sahibiyle sohbeti açar. Sayfa misafir gezinmeye açık olduğu için
+   * önce giriş kontrolü yapılıyor.
+   *
+   * Bu mantık iki ayrı butonda kullanılıyordu; üstelik üstteki "Mesaj Yaz"
+   * butonu gerçek konuşmayı açmak yerine sabit `/mesajlar/chat-1` mock
+   * kimliğine gidiyordu.
+   */
+  const handleStartChat = async () => {
+    if (!currentUser) {
+      navigate('/giris', { state: { from: `/ilan/${listing.id}` } });
+      return;
+    }
+
+    const conv = await messageService.getOrCreateConversationWithUser(
+      currentUser.id,
+      listing.user.id,
+      listing.id
+    );
+
+    if (conv) {
+      navigate(`/mesajlar/${conv.id}`);
+    } else {
+      showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
+    }
+  };
 
   const handleFavoriteToggle = async () => {
     // Misafir gezinmede favori eklenemez (RLS: favorites tablosu satır
@@ -264,7 +297,7 @@ export const ProductDetailPage: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/mesajlar/chat-1')}
+              onClick={handleStartChat}
               className="px-3 py-1.5 rounded-xl border border-stone-200 hover:bg-stone-100 text-xs font-semibold text-stone-700"
             >
               Mesaj Yaz
@@ -273,23 +306,30 @@ export const ProductDetailPage: React.FC = () => {
 
           <TrustCard
             trustProfile={{
+              // Bu değerler artık uydurulmuyor: enrichListings, ilan
+              // sahiplerinin trust_profiles satırını zaten topluca çekiyor
+              // ve özeti listing.user üzerinde taşıyor. Önceden burada
+              // sabit 14 takas / 14 değerlendirme / %98 yanıt oranı
+              // yazıyordu — hangi kullanıcı olursa olsun.
               score: listing.user.trustScore,
-              level: listing.user.trustScore >= 4.7 ? 'Güvenilir Üye' : 'Doğrulanmış Üye',
+              level:
+                listing.user.completedTrades === 0 && listing.user.reviewCount === 0
+                  ? 'Başlangıç'
+                  : listing.user.trustScore >= 4.5
+                  ? 'Topluluk Lideri'
+                  : listing.user.trustScore >= 3.5
+                  ? 'Çok Güvenilir'
+                  : 'Güvenilir',
               phoneVerified: true,
-              idVerified: false,
-              successfulTradesCount: 14,
-              cancellationRate: 0.02,
-              responseRate: 0.98,
-              averageRating: listing.user.trustScore,
-              reviewCount: 14,
+              idVerified: listing.user.isVerified,
+              successfulTradesCount: listing.user.completedTrades,
+              cancellationRate: 0,
+              responseRate: 1,
+              averageRating: listing.user.averageRating,
+              reviewCount: listing.user.reviewCount,
               reportCount: 0,
-              accountAgeDays: 180,
-              positiveHighlights: [
-                'Zamanında Teslim',
-                'Ürün Açıklamayla Uyumlu',
-                'Hızlı İletişim',
-              ],
-            }}
+              accountAgeDays: 1,
+              positiveHighlights: [],}}
             userName={listing.user.fullName}
           />
         </div>
@@ -313,24 +353,7 @@ export const ProductDetailPage: React.FC = () => {
         <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-2.5">
           <button
             type="button"
-            onClick={async () => {
-              if (!listing) return;
-              // Bu sayfa misafir gezinmeye açık; mesaj göndermek için giriş şart.
-              if (!currentUser) {
-                navigate('/giris', { state: { from: `/ilan/${listing.id}` } });
-                return;
-              }
-              const conv = await messageService.getOrCreateConversationWithUser(
-                currentUser.id,
-                listing.user.id,
-                listing.id
-              );
-              if (conv) {
-                navigate(`/mesajlar/${conv.id}`);
-              } else {
-                showToast('Sohbet açılamadı', 'Lütfen tekrar deneyin.', 'error');
-              }
-            }}
+            onClick={handleStartChat}
             className="flex-1 py-3 sm:py-3.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer whitespace-nowrap"
           >
             <MessageSquare className="w-4 h-4 shrink-0" />

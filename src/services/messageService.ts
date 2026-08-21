@@ -139,6 +139,39 @@ export const messageService = {
     return Promise.all((data ?? []).map((row) => mapConversationRow(row as ConversationRow, currentUserId)));
   },
 
+  /**
+   * Kullanıcının tüm konuşmalarındaki okunmamış mesaj sayısı.
+   *
+   * BottomNav'daki mesaj rozeti önceden sabit `badgeCount: 1` idi: alt menüde
+   * her zaman bir okunmamış mesaj varmış gibi görünüyor, kullanıcı hepsini
+   * okusa bile rozet kaybolmuyordu.
+   */
+  async getUnreadCount(currentUserId: string): Promise<number> {
+    const { data: convRows, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(`participant_one_id.eq.${currentUserId},participant_two_id.eq.${currentUserId}`);
+
+    if (convError || !convRows?.length) {
+      if (convError) console.error('Okunmamış mesaj sayısı alınamadı:', convError);
+      return 0;
+    }
+
+    const { count, error } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .in('conversation_id', convRows.map((c) => c.id))
+      .neq('sender_id', currentUserId)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Okunmamış mesaj sayısı alınamadı:', error);
+      return 0;
+    }
+
+    return count ?? 0;
+  },
+
   async getConversationById(id: string, currentUserId: string): Promise<Conversation | undefined> {
     const { data, error } = await supabase
       .from('conversations')

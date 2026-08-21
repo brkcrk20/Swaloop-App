@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { UserProfile, NotificationItem } from '../types';
 import { authService } from '../services/authService';
 import { listingService } from '../services/listingService';
+import { messageService } from '../services/messageService';
 import { supabase } from '../lib/supabase';
 import { INITIAL_NOTIFICATIONS } from '../data/mockData';
 import { Language, TranslationKey, getTranslation } from '../utils/translations';
@@ -31,6 +32,8 @@ interface AppContextType {
   unreadNotificationCount: number;
   markNotificationAsRead: (id: string) => void;
   favoritesCount: number;
+  unreadMessageCount: number;
+  refreshUnreadMessages: () => void;
   refreshUserData: () => void;
   toasts: ToastMessage[];
   showToast: (title: string, description?: string, type?: ToastMessage['type']) => void;
@@ -74,8 +77,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [favoritesCount, setFavoritesCount] = useState<number>(0);
 
+  // Sayaç yenileyicilerinin currentUser'a bağımlı olmadan güncel kimliği
+  // okuyabilmesi için; aksi halde her oturum değişiminde yeni callback
+  // üretilip aboneliklerin yeniden kurulması gerekirdi.
+  const currentUserRef = React.useRef<UserProfile | null>(currentUser);
+  React.useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   const refreshFavoritesCount = useCallback(() => {
     listingService.getFavorites().then((favs) => setFavoritesCount(favs.length));
+  }, []);
+
+  const [unreadMessageCount, setUnreadMessageCount] = useState<number>(0);
+
+  const refreshUnreadMessages = useCallback(() => {
+    if (!currentUserRef.current) {
+      setUnreadMessageCount(0);
+      return;
+    }
+    messageService
+      .getUnreadCount(currentUserRef.current.id)
+      .then(setUnreadMessageCount);
   }, []);
 
   // ── Oturum başlangıcı ve takibi ─────────────────────────────────────────
@@ -106,6 +129,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (event === 'SIGNED_OUT' || !session) {
         setCurrentUserState(null);
         setFavoritesCount(0);
+        setUnreadMessageCount(0);
         return;
       }
 
@@ -135,10 +159,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!currentUser) {
       setFavoritesCount(0);
+      setUnreadMessageCount(0);
       return;
     }
     refreshFavoritesCount();
-  }, [currentUser, refreshFavoritesCount]);
+    refreshUnreadMessages();
+  }, [currentUser, refreshFavoritesCount, refreshUnreadMessages]);
 
   const setLanguage = (lang: 'tr' | 'en') => {
     setLanguageState(lang);
@@ -201,6 +227,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unreadNotificationCount,
         markNotificationAsRead,
         favoritesCount,
+        unreadMessageCount,
+        refreshUnreadMessages,
         refreshUserData,
         toasts,
         showToast,

@@ -63,9 +63,11 @@ if [ -n "$unprotected" ]; then
   exit 1
 fi
 
-echo "▸ RLS saldırı testleri"
-psql -q -d "$DB" -f "$ROOT/supabase/tests/01_rls_policies.test.sql" 2>&1 \
-  | grep -v '^$' | sed 's/^psql:[^ ]* //' | sed 's/^/  /'
+for t in "$ROOT"/supabase/tests/*.test.sql; do
+  echo "▸ $(basename "$t")"
+  psql -q -d "$DB" -f "$t" 2>&1 \
+    | grep -v '^$' | sed 's/^psql:[^ ]* //' | sed 's/^/  /'
+done
 
 echo "▸ Bitti. Yukarıdaki her satırda gerçekleşen değer, köşeli parantez"
 echo "  içindeki beklenen değerle aynı olmalı; 'HATA bekleniyor' yazan"

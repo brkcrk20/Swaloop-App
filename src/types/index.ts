@@ -102,6 +102,12 @@ export interface Listing {
     city: string;
     district: string;
     isVerified: boolean;
+    /** Alınan değerlendirme sayısı. 0 ise puan gösterilmemeli. */
+    reviewCount: number;
+    /** Ortalama değerlendirme puanı; hiç değerlendirme yoksa 0. */
+    averageRating: number;
+    /** Tamamlanmış takas sayısı. */
+    completedTrades: number;
   };
   title: string;
   description: string;

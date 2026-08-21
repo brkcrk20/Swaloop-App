@@ -3,12 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp, useAuthUser } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
+import { authService } from '../../services/authService';
 import { messageService } from '../../services/messageService';
-import { OTHER_USERS } from '../../data/mockData';
 import { ProductCard } from '../../components/common/ProductCard';
 import { TrustCard } from '../../components/common/TrustCard';
-import { Listing, Review } from '../../types';
-import { ArrowLeft, MessageSquare, ShieldCheck, MapPin, Calendar, Star, Leaf } from 'lucide-react';
+import { Listing, Review, UserProfile } from '../../types';
+import { ArrowLeft, MessageSquare, ShieldCheck, MapPin, Calendar, Star, Leaf, Loader2, UserX } from 'lucide-react';
 
 export const PublicProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,14 +17,77 @@ export const PublicProfilePage: React.FC = () => {
   const { showToast } = useApp();
 
   const currentUser = useAuthUser();
-  const user = id && OTHER_USERS[id] ? OTHER_USERS[id] : Object.values(OTHER_USERS)[0];
+
+  // Profil artık mock OTHER_USERS'tan değil, gerçek profiles tablosundan
+  // geliyor. Önceden kimlik bulunamazsa listedeki ilk sahte kullanıcı
+  // gösteriliyor, ama ilanlar/değerlendirmeler gerçek veritabanından
+  // çekiliyordu — ekranda bir kişinin sahte adı, başkasının gerçek
+  // ilanlarıyla yan yana duruyordu.
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [userListings, setUserListings] = useState<Listing[]>([]);
   const [userReviews, setUserReviews] = useState<Review[]>([]);
 
   useEffect(() => {
-    listingService.getUserListings(user.id).then(setUserListings);
-    tradeService.getReviewsForUser(user.id).then(setUserReviews);
-  }, [user.id]);
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    authService.getPublicProfile(id).then((profile) => {
+      if (cancelled) return;
+      setUser(profile);
+      setIsLoading(false);
+
+      if (profile) {
+        listingService.getUserListings(profile.id).then((l) => {
+          if (!cancelled) setUserListings(l);
+        });
+        tradeService.getReviewsForUser(profile.id).then((r) => {
+          if (!cancelled) setUserReviews(r);
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-24 gap-3 text-stone-500"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="w-6 h-6 animate-spin" aria-hidden="true" />
+        <span className="text-sm">Profil yükleniyor…</span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 gap-3 text-center">
+        <UserX className="w-10 h-10 text-stone-400" aria-hidden="true" />
+        <h1 className="text-lg font-bold text-stone-900">Kullanıcı bulunamadı</h1>
+        <p className="text-sm text-stone-500 max-w-sm">
+          Bu profil kaldırılmış ya da bağlantı hatalı olabilir.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/kesfet')}
+          className="mt-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors"
+        >
+          Keşfete dön
+        </button>
+      </div>
+    );
+  }
 
   const handleStartChat = async () => {
     const conv = await messageService.getOrCreateConversationWithUser(currentUser.id, user.id);

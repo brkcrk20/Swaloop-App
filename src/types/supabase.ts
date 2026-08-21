@@ -566,10 +566,12 @@ export type Database = {
           district: string | null
           full_name: string | null
           id: string
+          interests: string[]
           phone: string
           role: string
           updated_at: string
           username: string | null
+          wanted_categories: string[]
         }
         Insert: {
           avatar_url?: string | null
@@ -579,10 +581,12 @@ export type Database = {
           district?: string | null
           full_name?: string | null
           id: string
+          interests?: string[]
           phone: string
           role?: string
           updated_at?: string
           username?: string | null
+          wanted_categories?: string[]
         }
         Update: {
           avatar_url?: string | null
@@ -592,10 +596,12 @@ export type Database = {
           district?: string | null
           full_name?: string | null
           id?: string
+          interests?: string[]
           phone?: string
           role?: string
           updated_at?: string
           username?: string | null
+          wanted_categories?: string[]
         }
         Relationships: []
       }
@@ -927,6 +933,8 @@ export type Database = {
       }
       trust_profiles: {
         Row: {
+          average_rating: number | null
+          review_count: number
           cancelled_trades: number
           completed_trades: number
           response_rate: number
@@ -936,6 +944,8 @@ export type Database = {
           verification_level: string
         }
         Insert: {
+          average_rating?: number | null
+          review_count?: number
           cancelled_trades?: number
           completed_trades?: number
           response_rate?: number
@@ -945,6 +955,8 @@ export type Database = {
           verification_level?: string
         }
         Update: {
+          average_rating?: number | null
+          review_count?: number
           cancelled_trades?: number
           completed_trades?: number
           response_rate?: number
@@ -994,6 +1006,28 @@ export type Database = {
           p_requested_listing_ids: string[]
         }
         Returns: string
+      }
+      cancel_trade: {
+        Args: { p_offer_id: string; p_reason?: string | null }
+        Returns: undefined
+      }
+      get_user_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          active_listings: number
+          completed_trades: number
+          completed_loops: number
+          co2e_kg: number
+          water_liters: number
+          energy_kwh: number
+          material_kg: number
+          waste_kg: number
+          items_reused: number
+        }[]
+      }
+      increment_listing_view: {
+        Args: { p_listing_id: string }
+        Returns: undefined
       }
       is_admin: {
         Args: Record<PropertyKey, never>

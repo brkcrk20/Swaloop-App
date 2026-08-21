@@ -87,10 +87,18 @@ select public.advance_trade(:'offer_id',5,null);
 insert into public.reviews (trade_id, reviewer_id, reviewed_user_id, rating)
 values (:'trade_id','33333333-3333-3333-3333-333333333333','11111111-1111-1111-1111-111111111111',5);
 
+-- T18'de kabul edilen takas ilk iki ilani kilitledigi icin bu bolum taze
+-- ilanlarla calisiyor (kilitli urun artik teklif edilemiyor).
+reset role;
+insert into public.listings (id, owner_id, category_id, title, status)
+select 'aaaaaaaa-0000-0000-0000-000000000003','11111111-1111-1111-1111-111111111111',c.id,'Ayse kitap','active' from public.categories c where c.slug='books';
+insert into public.listings (id, owner_id, category_id, title, status)
+select 'bbbbbbbb-0000-0000-0000-000000000004','22222222-2222-2222-2222-222222222222',c.id,'Berk gitar','active' from public.categories c where c.slug='music';
+set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select public.create_trade_offer('22222222-2222-2222-2222-222222222222',
-  array['aaaaaaaa-0000-0000-0000-000000000001']::uuid[],
-  array['bbbbbbbb-0000-0000-0000-000000000002']::uuid[],
+  array['aaaaaaaa-0000-0000-0000-000000000003']::uuid[],
+  array['bbbbbbbb-0000-0000-0000-000000000004']::uuid[],
   'IKINCI ORIJINAL NOT','in_person',null) as offer2 \gset
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select public.reject_trade_offer(:'offer2','Ilgilenmiyorum');

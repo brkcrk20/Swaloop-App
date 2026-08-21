@@ -200,6 +200,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Kadıköy',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'Canon EOS 200D',
     description:
@@ -249,6 +252,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Kadıköy',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'Bianchi Bisiklet',
     description:
@@ -297,6 +303,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Kadıköy',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'MacBook Air M1',
     description:
@@ -345,6 +354,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Kadıköy',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'iPad Pro 11" 128GB Wi-Fi',
     description:
@@ -391,6 +403,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Beşiktaş',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'Sony WH-1000XM4 Kulaklık',
     description:
@@ -436,6 +451,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Kadıköy',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'Husky 3 Kişilik Kamp Çadırı',
     description:
@@ -480,6 +498,9 @@ export const INITIAL_LISTINGS: Listing[] = [
       city: 'İstanbul',
       district: 'Beşiktaş',
       isVerified: true,
+      reviewCount: 0,
+      averageRating: 0,
+      completedTrades: 0,
     },
     title: 'Lego NASA Apollo Saturn V',
     description:

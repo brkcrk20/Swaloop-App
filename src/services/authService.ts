@@ -58,20 +58,78 @@ async function getTrustProfileRow(userId: string): Promise<any | null> {
   return data;
 }
 
-function trustLevelFromScore(
-  score: number
+/**
+ * Güven seviyesi yalnızca puana bakılarak belirlenemez: hiç takas yapmamış,
+ * hiç değerlendirme almamış bir kullanıcının nötr başlangıç puanı (3.0) onu
+ * "Güvenilir" gösterirdi. Geçmişi olmayan kullanıcı her zaman "Başlangıç".
+ */
+function trustLevel(
+  score: number,
+  reviewCount: number,
+  completedTrades: number
 ): TrustProfile['level'] {
+  if (reviewCount === 0 && completedTrades === 0) return 'Başlangıç';
   if (score >= 4.5) return 'Topluluk Lideri';
   if (score >= 3.5) return 'Çok Güvenilir';
   if (score >= 2.5) return 'Güvenilir';
   return 'Başlangıç';
 }
 
-export function mapProfile(row: any, trust?: any | null): UserProfile {
+/** get_user_stats RPC'sinin döndürdüğü satırı UserProfile['stats']'a çevirir. */
+export function mapStats(row: any | null | undefined): UserProfile['stats'] {
+  return {
+    totalTrades: row?.completed_trades ?? 0,
+    activeListings: row?.active_listings ?? 0,
+    completedLoops: row?.completed_loops ?? 0,
+    totalCo2Prevented: Number(row?.co2e_kg ?? 0),
+    totalWaterSaved: Number(row?.water_liters ?? 0),
+    totalEnergySaved: Number(row?.energy_kwh ?? 0),
+    totalRawMaterialsSaved: Number(row?.material_kg ?? 0),
+    totalItemsReused: row?.items_reused ?? 0,
+    responseRatePercent: 100,
+    avgResponseTimeMinutes: 0,
+    cancellationRatePercent: 0,
+  };
+}
+
+/**
+ * Kullanıcının toplam çevresel etkisini ve takas sayılarını veritabanından
+ * hesaplatır. impact_records üzerindeki RLS tek tek takas kayıtlarını gizli
+ * tutar; bu RPC yalnızca TOPLAMLARI döndürür (security definer).
+ */
+export async function fetchUserStats(userId: string): Promise<UserProfile['stats']> {
+  const { data, error } = await supabase
+    .rpc('get_user_stats', { p_user_id: userId })
+    .maybeSingle();
+
+  if (error) {
+    console.error('Kullanıcı istatistikleri alınamadı:', error);
+    return mapStats(null);
+  }
+
+  return mapStats(data);
+}
+
+export function mapProfile(
+  row: any,
+  trust?: any | null,
+  stats?: UserProfile['stats']
+): UserProfile {
   const completedTrades = trust?.completed_trades ?? 0;
   const cancelledTrades = trust?.cancelled_trades ?? 0;
   const totalTrades = completedTrades + cancelledTrades;
-  const score = trust?.trust_score ?? 5;
+  // Yeni kullanıcı için nötr başlangıç: 3.0. Önceden 5 idi ve hiç takas
+  // yapmamış herkes "Topluluk Lideri" görünüyordu.
+  const score = Number(trust?.trust_score ?? 3);
+  const reviewCount = trust?.review_count ?? 0;
+  const cancellationRate = totalTrades > 0 ? cancelledTrades / totalTrades : 0;
+
+  const resolvedStats: UserProfile['stats'] = {
+    ...(stats ?? mapStats(null)),
+    totalTrades: stats?.totalTrades ?? completedTrades,
+    responseRatePercent: Math.round((trust?.response_rate ?? 1) * 100),
+    cancellationRatePercent: Math.round(cancellationRate * 100),
+  };
 
   return {
     id: row.id,
@@ -87,8 +145,8 @@ export function mapProfile(row: any, trust?: any | null): UserProfile {
       ? new Date(row.created_at).toLocaleDateString('tr-TR')
       : 'Bugün',
 
-    interests: [],
-    wantedCategories: [],
+    interests: (row.interests ?? []) as CategoryId[],
+    wantedCategories: (row.wanted_categories ?? []) as CategoryId[],
 
     role: row.role === 'admin' || row.role === 'moderator' ? row.role : 'user',
 
@@ -99,19 +157,21 @@ export function mapProfile(row: any, trust?: any | null): UserProfile {
 
     trustProfile: {
       score,
-      level: trustLevelFromScore(score),
+      level: trustLevel(score, reviewCount, completedTrades),
       // Profil ancak telefon OTP'si doğrulandıktan sonra oluşabildiği için
       // bu alan gerçekten her zaman doğru.
       phoneVerified: true,
       idVerified: trust?.verification_level === 'id_verified',
       successfulTradesCount: completedTrades,
-      cancellationRate:
-        totalTrades > 0 ? cancelledTrades / totalTrades : 0,
+      cancellationRate,
       responseRate: trust?.response_rate ?? 1,
-      // DB'de reviews tablosu var ama ortalama puan/adet henüz burada
-      // agregе edilmiyor; bu iki alan hâlâ placeholder.
-      averageRating: 5,
-      reviewCount: 0,
+      // Artık gerçek: reviews tablosundan trigger ile hesaplanıp
+      // trust_profiles'a yazılıyor (bkz. recalc_trust_profile).
+      // Hiç değerlendirme yoksa average_rating NULL gelir; 0 göstermek
+      // yanıltıcı olacağı için nötr 0 yerine reviewCount ile birlikte
+      // yorumlanmalı — arayüz reviewCount === 0 ise puanı göstermez.
+      averageRating: Number(trust?.average_rating ?? 0),
+      reviewCount,
       reportCount: 0,
       accountAgeDays: row.created_at
         ? Math.max(
@@ -125,22 +185,7 @@ export function mapProfile(row: any, trust?: any | null): UserProfile {
       positiveHighlights: ['Telefon doğrulandı'],
     },
 
-    stats: {
-      totalTrades: completedTrades,
-      activeListings: 0,
-      completedLoops: 0,
-      totalCo2Prevented: 0,
-      totalWaterSaved: 0,
-      totalEnergySaved: 0,
-      totalRawMaterialsSaved: 0,
-      totalItemsReused: 0,
-      responseRatePercent: Math.round((trust?.response_rate ?? 1) * 100),
-      avgResponseTimeMinutes: 0,
-      cancellationRatePercent:
-        totalTrades > 0
-          ? Math.round((cancelledTrades / totalTrades) * 100)
-          : 0,
-    },
+    stats: resolvedStats,
   };
 }
 
@@ -295,8 +340,11 @@ export const authService = {
       };
     }
 
-    const trust = await getTrustProfileRow(profile.id);
-    const user = mapProfile(profile, trust);
+    const [trust, stats] = await Promise.all([
+      getTrustProfileRow(profile.id),
+      fetchUserStats(profile.id),
+    ]);
+    const user = mapProfile(profile, trust, stats);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -343,6 +391,10 @@ export const authService = {
           city: data.city,
           district: data.district,
           avatar_url: data.avatarUrl ?? null,
+          // Önceden bu iki alan hiç kaydedilmiyordu: kayıt sırasında seçilen
+          // ilgi alanları ilk sayfa yenilemesinde kayboluyordu.
+          interests: data.interests ?? [],
+          wanted_categories: data.wantedCategories ?? [],
           updated_at: new Date().toISOString(),
         },
         {
@@ -358,11 +410,11 @@ export const authService = {
       return undefined;
     }
 
-    const trust = await getTrustProfileRow(profile.id);
-    const newUser = mapProfile(profile, trust);
-
-    newUser.interests = data.interests ?? [];
-    newUser.wantedCategories = data.wantedCategories ?? [];
+    const [trust, stats] = await Promise.all([
+      getTrustProfileRow(profile.id),
+      fetchUserStats(profile.id),
+    ]);
+    const newUser = mapProfile(profile, trust, stats);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -392,8 +444,11 @@ export const authService = {
       return null;
     }
 
-    const trust = await getTrustProfileRow(profile.id);
-    const user = mapProfile(profile, trust);
+    const [trust, stats] = await Promise.all([
+      getTrustProfileRow(profile.id),
+      fetchUserStats(profile.id),
+    ]);
+    const user = mapProfile(profile, trust, stats);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -480,6 +535,14 @@ export const authService = {
       dbUpdates.bio = updates.bio;
     }
 
+    if (updates.interests !== undefined) {
+      dbUpdates.interests = updates.interests;
+    }
+
+    if (updates.wantedCategories !== undefined) {
+      dbUpdates.wanted_categories = updates.wantedCategories;
+    }
+
     dbUpdates.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -494,8 +557,11 @@ export const authService = {
       return undefined;
     }
 
-    const trust = await getTrustProfileRow(data.id);
-    const user = mapProfile(data, trust);
+    const [trust, stats] = await Promise.all([
+      getTrustProfileRow(data.id),
+      fetchUserStats(data.id),
+    ]);
+    const user = mapProfile(data, trust, stats);
 
     localStorage.setItem(
       AUTH_STORAGE_KEY,
@@ -503,5 +569,37 @@ export const authService = {
     );
 
     return user;
+  },
+
+  /**
+   * Başka bir kullanıcının herkese açık profilini getirir.
+   *
+   * PublicProfilePage önceden bu veriyi `OTHER_USERS` mock nesnesinden
+   * okuyordu ve kimlik bulunamazsa listedeki İLK sahte kullanıcıyı
+   * gösteriyordu — üstelik aynı sayfa ilanları ve değerlendirmeleri gerçek
+   * veritabanından çekiyordu. Yani bir kişinin sahte adı, başka birinin
+   * gerçek ilanlarıyla yan yana görünüyordu.
+   *
+   * Telefon kolonu bilerek seçilmiyor: başka kullanıcıların numarası
+   * istemciye inmemeli.
+   */
+  async getPublicProfile(userId: string): Promise<UserProfile | null> {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url, city, district, bio, created_at, interests, wanted_categories, role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !profile) {
+      if (error) console.error('Profil alınamadı:', error);
+      return null;
+    }
+
+    const [trust, stats] = await Promise.all([
+      getTrustProfileRow(profile.id),
+      fetchUserStats(profile.id),
+    ]);
+
+    return mapProfile(profile, trust, stats);
   },
 };
