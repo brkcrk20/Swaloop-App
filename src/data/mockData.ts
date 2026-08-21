@@ -26,6 +26,7 @@ export const CURRENT_USER: UserProfile = {
   bio: 'Sıfır atık ve sürdürülebilir yaşam tutkunu. Fotoğraf ve outdoor ekipmanlarını dolaşıma sokmayı seviyorum.',
   interests: ['electronics', 'sports', 'hobby', 'books'],
   wantedCategories: ['electronics', 'sports', 'home-living'],
+  role: 'user',
   isVerified: true,
   trustProfile: {
     score: 4.88,
@@ -73,6 +74,7 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     bio: 'Bisiklet tutkunu ve tasarımcı. İhtiyaç fazlası bisiklet ve spor aksesuarlarımı takaslıyorum.',
     interests: ['sports', 'fashion', 'hobby'],
     wantedCategories: ['electronics', 'books'],
+    role: 'user',
     isVerified: true,
     trustProfile: {
       score: 4.92,
@@ -113,6 +115,7 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     bio: 'Yazılım geliştirici. Tablet ve bilgisayar aksesuarlarını takaslamak istiyorum.',
     interests: ['electronics', 'books'],
     wantedCategories: ['electronics', 'home-living'],
+    role: 'user',
     isVerified: true,
     trustProfile: {
       score: 4.75,
@@ -153,6 +156,7 @@ export const OTHER_USERS: Record<string, UserProfile> = {
     bio: 'Bitki aşığı, müzik ve ses ekipmanları meraklısı.',
     interests: ['home-living', 'books', 'hobby'],
     wantedCategories: ['sports', 'electronics'],
+    role: 'user',
     isVerified: true,
     trustProfile: {
       score: 4.85,

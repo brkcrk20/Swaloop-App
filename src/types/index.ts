@@ -43,6 +43,12 @@ export interface UserProfile {
   bio?: string;
   interests: CategoryId[];
   wantedCategories: CategoryId[];
+  /**
+   * Yetki seviyesi (public.profiles.role). Yönetim paneline erişimi belirler.
+   * Asıl kontrol veritabanındaki RLS politikalarında (public.is_admin());
+   * buradaki değer yalnızca arayüzü gizlemek için kullanılır.
+   */
+  role: 'user' | 'moderator' | 'admin';
   isVerified: boolean;
   trustProfile: TrustProfile;
   stats: {

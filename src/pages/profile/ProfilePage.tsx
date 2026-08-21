@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
 import { Listing, Review } from '../../types';
@@ -35,7 +35,6 @@ import {
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const {
-    currentUser,
     showToast,
     language,
     setLanguage,
@@ -44,6 +43,7 @@ export const ProfilePage: React.FC = () => {
     toggleTheme,
     t,
   } = useApp();
+  const currentUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<'listings' | 'impact' | 'badges' | 'reviews'>('listings');
   const [showSvsModal, setShowSvsModal] = useState(false);
 

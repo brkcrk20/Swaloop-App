@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import { listingService } from '../../services/listingService';
 import { TradeCard } from '../../components/common/TradeCard';
@@ -27,7 +27,8 @@ import {
 
 export const TradeRequestsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'smart_matches' | 'active_process'>('incoming');
   const [filterStatus, setFilterStatus] = useState<string>('all');

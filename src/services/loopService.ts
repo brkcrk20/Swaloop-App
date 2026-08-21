@@ -48,8 +48,14 @@ function normalizeParticipantStatus(status: string | null | undefined): LoopPart
     : 'pending';
 }
 
+// Profil join'lerinde `profiles(*)` kullanılmıyor: o satır `phone` kolonunu da
+// içeriyor ve `*` ile çekildiğinde başka kullanıcıların telefon numarası
+// istemciye iniyordu. RLS satır bazlıdır, kolon bazlı değildir — bu yüzden
+// hangi kolonların istendiği burada açıkça sınırlanıyor.
+const PROFILE_COLS = 'id, full_name, avatar_url, city, district, bio, created_at';
+
 const LOOP_SELECT =
-  '*, participants:loop_participants(*, user:profiles(*), listing:listings(*, user:profiles(*), images:listing_images(storage_path)))';
+  `*, participants:loop_participants(*, user:profiles(${PROFILE_COLS}), listing:listings(*, user:profiles(${PROFILE_COLS}), images:listing_images(storage_path)))`;
 
 type LoopParticipantRow = {
   id: string;
@@ -232,20 +238,16 @@ export const loopService = {
       return undefined;
     }
 
-    const { data: loopRow } = await supabase
-      .from('loops')
-      .select('max_participants')
-      .eq('id', loopId)
-      .maybeSingle();
+    // Döngü durumunu istemci hesaplayıp yazmıyor: RLS açıldıktan sonra
+    // `loops` satırını yalnızca oluşturanı güncelleyebiliyor, oysa döngüyü
+    // dolduran son katılımcı çoğu zaman oluşturan değil. Durum artık
+    // katılımcı satırlarından veritabanı tarafında hesaplanıyor.
+    const { error: syncError } = await supabase.rpc('sync_loop_status', {
+      p_loop_id: loopId,
+    });
 
-    const { count } = await supabase
-      .from('loop_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('loop_id', loopId);
-
-    if (loopRow?.max_participants && (count ?? 0) >= loopRow.max_participants) {
-      const lockUpdate: TablesUpdate<'loops'> = { status: 'locked' };
-      await supabase.from('loops').update(lockUpdate).eq('id', loopId);
+    if (syncError) {
+      console.error('Döngü durumu güncellenemedi:', syncError);
     }
 
     return this.getLoopById(loopId);
@@ -265,38 +267,29 @@ export const loopService = {
       return undefined;
     }
 
-    const { data: participantRows, error: fetchError } = await supabase
-      .from('loop_participants')
-      .select('status')
-      .eq('loop_id', loopId);
+    // "Herkes onayladı mı?" kontrolü ve durum geçişi de veritabanına taşındı;
+    // bkz. joinLoop'taki not.
+    const { error: syncError } = await supabase.rpc('sync_loop_status', {
+      p_loop_id: loopId,
+    });
 
-    if (fetchError) {
-      console.error('Döngü katılımcıları getirilemedi:', fetchError);
-    } else {
-      const allConfirmed = (participantRows ?? []).every((p) =>
-        ['confirmed', 'delivered', 'completed'].includes(p.status)
-      );
-
-      if (allConfirmed) {
-        const loopUpdate: TablesUpdate<'loops'> = { status: 'in_delivery' };
-        await supabase.from('loops').update(loopUpdate).eq('id', loopId);
-      }
+    if (syncError) {
+      console.error('Döngü durumu güncellenemedi:', syncError);
     }
 
     return this.getLoopById(loopId);
   },
 
   async completeLoop(loopId: string): Promise<Loop | undefined> {
-    const loopUpdate: TablesUpdate<'loops'> = { status: 'completed' };
-    const { error: loopError } = await supabase.from('loops').update(loopUpdate).eq('id', loopId);
+    // Döngü ve TÜM katılımcı satırları tek transaction'da tamamlanıyor.
+    // Önceden istemci başkalarının katılımcı satırlarını da güncelliyordu;
+    // RLS ile bu artık mümkün değil (ve olmamalı).
+    const { error } = await supabase.rpc('complete_loop', { p_loop_id: loopId });
 
-    if (loopError) {
-      console.error('Döngü tamamlanamadı:', loopError);
+    if (error) {
+      console.error('Döngü tamamlanamadı:', error);
       return undefined;
     }
-
-    const participantUpdate: TablesUpdate<'loop_participants'> = { status: 'completed' };
-    await supabase.from('loop_participants').update(participantUpdate).eq('loop_id', loopId);
 
     return this.getLoopById(loopId);
   },

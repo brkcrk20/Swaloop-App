@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { impactService } from '../../services/impactService';
 import { CATEGORIES } from '../../constants';
 import { CategoryId, ProductCondition } from '../../types';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { ImpactCard } from '../../components/common/ImpactCard';
 import {
   ArrowLeft,
@@ -22,7 +22,8 @@ import {
 
 export const CreateListingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Form State

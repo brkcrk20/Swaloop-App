@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import { TradeCard } from '../../components/common/TradeCard';
 import { TradeOffer } from '../../types';
@@ -8,7 +8,8 @@ import { ArrowLeftRight, Inbox, Send, CheckCircle2, Clock, Filter, Plus, Sparkle
 
 export const TradeOffersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'completed'>('incoming');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 

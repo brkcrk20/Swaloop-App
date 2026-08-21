@@ -65,6 +65,13 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const handleFavoriteToggle = async () => {
+    // Misafir gezinmede favori eklenemez (RLS: favorites tablosu satır
+    // sahibine kapalı). Önceden istek sessizce reddediliyor, kullanıcı
+    // "Favorilere Eklendi" bildirimini yine de görüyordu.
+    if (!currentUser) {
+      navigate('/giris', { state: { from: `/ilan/${listing.id}` } });
+      return;
+    }
     const isFav = await listingService.toggleFavorite(listing.id);
     showToast(isFav ? 'Favorilere Eklendi' : 'Favorilerden Çıkarıldı', listing.title, 'info');
   };
@@ -308,6 +315,11 @@ export const ProductDetailPage: React.FC = () => {
             type="button"
             onClick={async () => {
               if (!listing) return;
+              // Bu sayfa misafir gezinmeye açık; mesaj göndermek için giriş şart.
+              if (!currentUser) {
+                navigate('/giris', { state: { from: `/ilan/${listing.id}` } });
+                return;
+              }
               const conv = await messageService.getOrCreateConversationWithUser(
                 currentUser.id,
                 listing.user.id,

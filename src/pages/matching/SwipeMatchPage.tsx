@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
 import { messageService } from '../../services/messageService';
@@ -30,7 +30,8 @@ import {
 
 export const SwipeMatchPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [userMyListings, setUserMyListings] = useState<Listing[]>([]);

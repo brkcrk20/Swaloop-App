@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { authService } from '../../services/authService';
 import { CATEGORIES } from '../../constants';
 import { ArrowLeft, Camera, ShieldCheck, Check } from 'lucide-react';
 
 export const EditProfilePage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, setCurrentUser, showToast } = useApp();
+  const { setCurrentUser, showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [fullName, setFullName] = useState(currentUser.fullName);
   const [bio, setBio] = useState(currentUser.bio || '');

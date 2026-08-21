@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
 import { messageService } from '../../services/messageService';
@@ -14,7 +14,9 @@ export const PublicProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+
+  const currentUser = useAuthUser();
   const user = id && OTHER_USERS[id] ? OTHER_USERS[id] : Object.values(OTHER_USERS)[0];
   const [userListings, setUserListings] = useState<Listing[]>([]);
   const [userReviews, setUserReviews] = useState<Review[]>([]);

@@ -1,3 +1,14 @@
+// NOT: Bu dosya normalde `supabase gen types typescript` ile üretilir.
+// 21.08.2026'daki RLS/RPC turunda, canlı veritabanına erişim olmadığı için
+// aşağıdaki eklemeler ELLE yapıldı (migration dosyalarıyla birebir uyumlu):
+//   · profiles.role
+//   · trade_offers.rejection_reason, trade_offers.proposed_delivery_method
+//   · Functions: is_admin, phone_exists, create_trade_offer,
+//     accept_trade_offer, reject_trade_offer, mark_offer_countered,
+//     advance_trade
+// Migration'lar canlıya uygulandıktan sonra bu dosyayı yeniden üretin:
+//   supabase gen types typescript --linked > src/types/supabase.ts
+
 export type Json =
   | string
   | number
@@ -556,6 +567,7 @@ export type Database = {
           full_name: string | null
           id: string
           phone: string
+          role: string
           updated_at: string
           username: string | null
         }
@@ -568,6 +580,7 @@ export type Database = {
           full_name?: string | null
           id: string
           phone: string
+          role?: string
           updated_at?: string
           username?: string | null
         }
@@ -580,6 +593,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string
+          role?: string
           updated_at?: string
           username?: string | null
         }
@@ -743,7 +757,9 @@ export type Database = {
           id: string
           message: string | null
           parent_offer_id: string | null
+          proposed_delivery_method: string | null
           receiver_id: string
+          rejection_reason: string | null
           sender_id: string
           status: string
           updated_at: string
@@ -753,7 +769,9 @@ export type Database = {
           id?: string
           message?: string | null
           parent_offer_id?: string | null
+          proposed_delivery_method?: string | null
           receiver_id: string
+          rejection_reason?: string | null
           sender_id: string
           status?: string
           updated_at?: string
@@ -763,7 +781,9 @@ export type Database = {
           id?: string
           message?: string | null
           parent_offer_id?: string | null
+          proposed_delivery_method?: string | null
           receiver_id?: string
+          rejection_reason?: string | null
           sender_id?: string
           status?: string
           updated_at?: string
@@ -948,7 +968,57 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_trade_offer: {
+        Args: { p_offer_id: string }
+        Returns: string
+      }
+      advance_trade: {
+        Args: {
+          p_impact?: Json | null
+          p_offer_id: string
+          p_target_step: number
+        }
+        Returns: undefined
+      }
+      complete_loop: {
+        Args: { p_loop_id: string }
+        Returns: undefined
+      }
+      create_trade_offer: {
+        Args: {
+          p_delivery_method?: string
+          p_message?: string | null
+          p_offered_listing_ids: string[]
+          p_parent_offer_id?: string | null
+          p_receiver_id: string
+          p_requested_listing_ids: string[]
+        }
+        Returns: string
+      }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_loop_participant: {
+        Args: { p_loop_id: string }
+        Returns: boolean
+      }
+      sync_loop_status: {
+        Args: { p_loop_id: string }
+        Returns: string
+      }
+      mark_offer_countered: {
+        Args: { p_original_offer_id: string }
+        Returns: undefined
+      }
+      phone_exists: {
+        Args: { check_phone: string }
+        Returns: boolean
+      }
+      reject_trade_offer: {
+        Args: { p_offer_id: string; p_reason?: string | null }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

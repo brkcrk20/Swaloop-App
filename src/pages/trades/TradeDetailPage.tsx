@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import { messageService } from '../../services/messageService';
 import { TradeOffer } from '../../types';
@@ -30,7 +30,8 @@ import {
 export const TradeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [trade, setTrade] = useState<TradeOffer | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);

@@ -57,11 +57,19 @@ function mapPost(row: any, currentUserId?: string): CommunityPost {
   };
 }
 
+// Profil join'lerinde `profiles(*)` kullanılmıyor: o satır `phone` kolonunu da
+// içeriyor ve `*` ile çekildiğinde başka kullanıcıların telefon numarası
+// istemciye iniyordu. RLS satır bazlıdır, kolon bazlı değildir — bu yüzden
+// hangi kolonların istendiği burada açıkça sınırlanıyor.
+const PROFILE_COLS = 'id, full_name, avatar_url, city, district, bio, created_at';
+
+const POST_SELECT = `*, author:profiles(${PROFILE_COLS}), post_likes(user_id)`;
+
 export const communityService = {
   async getPosts(currentUserId?: string): Promise<CommunityPost[]> {
     const { data, error } = await supabase
       .from('community_posts')
-      .select('*, author:profiles(*), post_likes(user_id)')
+      .select(POST_SELECT)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -92,7 +100,7 @@ export const communityService = {
     const { data, error } = await supabase
       .from('community_posts')
       .insert(insert)
-      .select('*, author:profiles(*), post_likes(user_id)')
+      .select(POST_SELECT)
       .single();
 
     if (error || !data) {
@@ -127,7 +135,7 @@ export const communityService = {
 
     const { data, error: fetchError } = await supabase
       .from('community_posts')
-      .select('*, author:profiles(*), post_likes(user_id)')
+      .select(POST_SELECT)
       .eq('id', postId)
       .maybeSingle();
 

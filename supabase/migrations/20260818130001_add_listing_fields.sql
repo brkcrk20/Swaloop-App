@@ -1,3 +1,13 @@
+-- NOT (21.08.2026): Bu dosya önceden 20260818120000 sıra numarasıyla
+-- duruyordu — yani `listings` ve `favorites` tablolarını oluşturan
+-- 20260818130000_sync_remote_schema_structure.sql'den ÖNCE. Canlı
+-- veritabanında tablolar zaten var olduğu için bu fark hiç fark edilmemişti,
+-- ama temiz bir ortamda (`supabase db reset`) migration zinciri burada
+-- "relation public.listings does not exist" hatasıyla kırılıyordu.
+-- Sıra numarası, şema dosyasından sonraya alındı. Dosyanın tamamı
+-- idempotent (`if not exists` / `create or replace`) olduğu için canlıya
+-- yeniden uygulanması zararsızdır.
+
 -- Adds columns that the front-end (listingService.ts) already reads/writes
 -- but which were missing from public.listings, causing "istenen ürün",
 -- teslimat tercihleri, etiketler, görüntülenme ve favori sayılarının

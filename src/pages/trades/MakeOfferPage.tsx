@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { listingService } from '../../services/listingService';
 import { tradeService } from '../../services/tradeService';
 import { impactService } from '../../services/impactService';
@@ -23,7 +23,8 @@ export const MakeOfferPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetListingId = searchParams.get('targetId');
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [targetListing, setTargetListing] = useState<Listing | undefined>(undefined);
   const [isLoadingTarget, setIsLoadingTarget] = useState(true);
@@ -122,6 +123,7 @@ export const MakeOfferPage: React.FC = () => {
           memberSince: '2024',
           interests: [],
           wantedCategories: [],
+          role: 'user',
           isVerified: targetListing.user.isVerified,
           trustProfile: {
             score: targetListing.user.trustScore,

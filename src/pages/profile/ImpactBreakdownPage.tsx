@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { SvsExplanationModal } from '../../components/common/SvsExplanationModal';
 import {
   ArrowLeft,
@@ -21,7 +21,8 @@ import {
 
 export const ImpactBreakdownPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
   const [selectedMonth, setSelectedMonth] = useState('Mayıs 2024');
   const [showSvsModal, setShowSvsModal] = useState(false);
   const [showDetailedSection, setShowDetailedSection] = useState(false);

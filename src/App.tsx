@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { RequireAuth, RequireAdmin } from './components/auth/RouteGuards';
 import { Header } from './components/layout/Header';
 import { BottomNav } from './components/layout/BottomNav';
 import { ToastContainer } from './components/layout/ToastContainer';
@@ -78,56 +79,56 @@ export default function App() {
                 <Route path="/kesfet" element={<DiscoverPage />} />
                 <Route path="/arama" element={<SearchPage />} />
                 <Route path="/harita" element={<NearbyMapPage />} />
-                <Route path="/favoriler" element={<FavoritesPage />} />
+                <Route path="/favoriler" element={<RequireAuth><FavoritesPage /></RequireAuth>} />
 
                 {/* Listings */}
                 <Route path="/ilan/:id" element={<ProductDetailPage />} />
-                <Route path="/ilan-ver" element={<CreateListingPage />} />
+                <Route path="/ilan-ver" element={<RequireAuth><CreateListingPage /></RequireAuth>} />
 
                 {/* Trades */}
-                <Route path="/takaslarim" element={<TradeOffersPage />} />
-                <Route path="/takas-istekleri" element={<TradeRequestsPage />} />
-                <Route path="/istekler" element={<TradeRequestsPage />} />
-                <Route path="/eslesme" element={<SwipeMatchPage />} />
-                <Route path="/takas-eslesme" element={<SwipeMatchPage />} />
-                <Route path="/kaydir" element={<SwipeMatchPage />} />
-                <Route path="/swipe" element={<SwipeMatchPage />} />
-                <Route path="/teklif-ver" element={<MakeOfferPage />} />
-                <Route path="/teklif/:id" element={<TradeDetailPage />} />
-                <Route path="/takas-sureci" element={<TradeProcessPage />} />
-                <Route path="/takas-sureci/:id" element={<TradeProcessPage />} />
-                <Route path="/takas-tamamlandi" element={<TradeSuccessPage />} />
-                <Route path="/takas-tamamlandi/:id" element={<TradeSuccessPage />} />
-                <Route path="/dispute" element={<DisputePage />} />
+                <Route path="/takaslarim" element={<RequireAuth><TradeOffersPage /></RequireAuth>} />
+                <Route path="/takas-istekleri" element={<RequireAuth><TradeRequestsPage /></RequireAuth>} />
+                <Route path="/istekler" element={<RequireAuth><TradeRequestsPage /></RequireAuth>} />
+                <Route path="/eslesme" element={<RequireAuth><SwipeMatchPage /></RequireAuth>} />
+                <Route path="/takas-eslesme" element={<RequireAuth><SwipeMatchPage /></RequireAuth>} />
+                <Route path="/kaydir" element={<RequireAuth><SwipeMatchPage /></RequireAuth>} />
+                <Route path="/swipe" element={<RequireAuth><SwipeMatchPage /></RequireAuth>} />
+                <Route path="/teklif-ver" element={<RequireAuth><MakeOfferPage /></RequireAuth>} />
+                <Route path="/teklif/:id" element={<RequireAuth><TradeDetailPage /></RequireAuth>} />
+                <Route path="/takas-sureci" element={<RequireAuth><TradeProcessPage /></RequireAuth>} />
+                <Route path="/takas-sureci/:id" element={<RequireAuth><TradeProcessPage /></RequireAuth>} />
+                <Route path="/takas-tamamlandi" element={<RequireAuth><TradeSuccessPage /></RequireAuth>} />
+                <Route path="/takas-tamamlandi/:id" element={<RequireAuth><TradeSuccessPage /></RequireAuth>} />
+                <Route path="/dispute" element={<RequireAuth><DisputePage /></RequireAuth>} />
 
                 {/* Messages */}
-                <Route path="/mesajlar" element={<MessagesPage />} />
-                <Route path="/mesajlar/:id" element={<MessagesPage />} />
+                <Route path="/mesajlar" element={<RequireAuth><MessagesPage /></RequireAuth>} />
+                <Route path="/mesajlar/:id" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 
                 {/* Notifications */}
-                <Route path="/bildirimler" element={<NotificationsPage />} />
+                <Route path="/bildirimler" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
 
                 {/* Profile */}
-                <Route path="/profil" element={<ProfilePage />} />
-                <Route path="/profil/duzenle" element={<EditProfilePage />} />
-                <Route path="/profil/:id" element={<PublicProfilePage />} />
-                <Route path="/etkim" element={<ImpactBreakdownPage />} />
-                <Route path="/rozetlerim" element={<BadgesPage />} />
+                <Route path="/profil" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+                <Route path="/profil/duzenle" element={<RequireAuth><EditProfilePage /></RequireAuth>} />
+                <Route path="/profil/:id" element={<RequireAuth><PublicProfilePage /></RequireAuth>} />
+                <Route path="/etkim" element={<RequireAuth><ImpactBreakdownPage /></RequireAuth>} />
+                <Route path="/rozetlerim" element={<RequireAuth><BadgesPage /></RequireAuth>} />
 
                 {/* Loops & Community */}
-                <Route path="/donguler" element={<LoopsPage />} />
-                <Route path="/loop" element={<LoopsPage />} />
-                <Route path="/takas-yolculugum" element={<PaperclipPage />} />
-                <Route path="/yolculuk" element={<PaperclipPage />} />
-                <Route path="/paperclip" element={<PaperclipPage />} />
-                <Route path="/kirmizi-atas" element={<PaperclipPage />} />
-                <Route path="/mystery-swap" element={<MysterySwapPage />} />
-                <Route path="/gizemli-kutu" element={<MysterySwapPage />} />
-                <Route path="/topluluk" element={<CommunityPage />} />
-                <Route path="/etkinlikler" element={<EventsPage />} />
+                <Route path="/donguler" element={<RequireAuth><LoopsPage /></RequireAuth>} />
+                <Route path="/loop" element={<RequireAuth><LoopsPage /></RequireAuth>} />
+                <Route path="/takas-yolculugum" element={<RequireAuth><PaperclipPage /></RequireAuth>} />
+                <Route path="/yolculuk" element={<RequireAuth><PaperclipPage /></RequireAuth>} />
+                <Route path="/paperclip" element={<RequireAuth><PaperclipPage /></RequireAuth>} />
+                <Route path="/kirmizi-atas" element={<RequireAuth><PaperclipPage /></RequireAuth>} />
+                <Route path="/mystery-swap" element={<RequireAuth><MysterySwapPage /></RequireAuth>} />
+                <Route path="/gizemli-kutu" element={<RequireAuth><MysterySwapPage /></RequireAuth>} />
+                <Route path="/topluluk" element={<RequireAuth><CommunityPage /></RequireAuth>} />
+                <Route path="/etkinlikler" element={<RequireAuth><EventsPage /></RequireAuth>} />
 
                 {/* Admin & About */}
-                <Route path="/admin" element={<AdminDashboardPage />} />
+                <Route path="/admin" element={<RequireAdmin><AdminDashboardPage /></RequireAdmin>} />
                 <Route path="/hakkimizda" element={<AboutSwaloopPage />} />
 
                 {/* Fallback */}

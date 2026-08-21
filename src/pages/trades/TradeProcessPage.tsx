@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { tradeService } from '../../services/tradeService';
 import {
   ArrowLeft,
@@ -19,7 +19,8 @@ import {
 export const TradeProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [currentStep, setCurrentStep] = useState<number>(3); // Step 3: Takas Kilitlendi in mockup
   const [deliveryType, setDeliveryType] = useState('Elden teslim - Kadıköy');

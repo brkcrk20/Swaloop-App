@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { loopService } from '../../services/loopService';
 import { MYSTERY_SWAP_ITEMS, PAPERCLIP_STAGES } from '../../data/mockData';
 import { Loop } from '../../types';
@@ -22,7 +22,8 @@ import {
 
 export const LoopsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<'loops' | 'mystery' | 'paperclip'>('loops');
   const [loops, setLoops] = useState<Loop[]>([]);
   const [selectedLoop, setSelectedLoop] = useState<Loop | undefined>(undefined);

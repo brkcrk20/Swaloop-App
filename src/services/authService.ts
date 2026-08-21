@@ -1,5 +1,4 @@
 import { UserProfile, CategoryId, TrustProfile } from '../types';
-import { CURRENT_USER } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import type { TablesUpdate } from '../types/supabase';
 
@@ -91,11 +90,18 @@ export function mapProfile(row: any, trust?: any | null): UserProfile {
     interests: [],
     wantedCategories: [],
 
-    isVerified: true,
+    role: row.role === 'admin' || row.role === 'moderator' ? row.role : 'user',
+
+    // Kimlik doğrulaması yalnızca trust_profiles.verification_level'dan
+    // okunur. Önceden sabit `true` idi ve herkes doğrulanmış rozetiyle
+    // görünüyordu — güven sinyali üreten bir üründe yanıltıcı bir gösterge.
+    isVerified: trust?.verification_level === 'id_verified',
 
     trustProfile: {
       score,
       level: trustLevelFromScore(score),
+      // Profil ancak telefon OTP'si doğrulandıktan sonra oluşabildiği için
+      // bu alan gerçekten her zaman doğru.
       phoneVerified: true,
       idVerified: trust?.verification_level === 'id_verified',
       successfulTradesCount: completedTrades,
@@ -199,11 +205,13 @@ export const authService = {
   ): Promise<PhoneCheckResult> {
     const phone = normalizePhone(formattedPhone);
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('phone', phone)
-      .maybeSingle();
+    // RLS açıldıktan sonra anon kullanıcı `profiles` tablosunu okuyamıyor.
+    // Kontrol, yalnızca boolean döndüren `phone_exists` RPC'sine taşındı
+    // (bkz. 20260821090000_enable_rls_all_tables.sql) — böylece kayıt akışı
+    // çalışmaya devam ederken numara listesi dışarı sızmıyor.
+    const { data, error } = await supabase.rpc('phone_exists', {
+      check_phone: phone,
+    });
 
     if (error) {
       console.error('Telefon kontrolü başarısız:', error);
@@ -214,9 +222,11 @@ export const authService = {
       };
     }
 
+    const exists = data === true;
+
     return {
-      exists: !!data,
-      message: data
+      exists,
+      message: exists
         ? 'Bu telefon numarasına ait aktif bir Swaloop hesabı zaten bulunmaktadır. Lütfen giriş yapınız.'
         : 'Telefon numarası kullanılabilir.',
     };
@@ -393,18 +403,27 @@ export const authService = {
     return user;
   },
 
-  getCurrentUser(): UserProfile {
+  /**
+   * Önbellekteki profili döndürür — YALNIZCA ilk boyama için bir ipucu olarak
+   * kullanılmalıdır. Gerçek kaynak her zaman Supabase oturumudur; AppContext
+   * açılışta getCurrentUserFromSupabase() ile bunu doğrular.
+   *
+   * Önceden burada oturum yoksa mock CURRENT_USER döndürülüyordu; bu yüzden
+   * hiç giriş yapmamış bir ziyaretçi uygulamada "Berke Çelik" olarak oturum
+   * açmış görünüyordu — ve o sahte kimlik geçerli bir UUID olmadığı için
+   * onunla yapılan her yazma işlemi veritabanı seviyesinde patlıyordu.
+   */
+  getCachedUser(): UserProfile | null {
     const saved = localStorage.getItem(AUTH_STORAGE_KEY);
 
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        // devam
-      }
-    }
+    if (!saved) return null;
 
-    return CURRENT_USER;
+    try {
+      const parsed = JSON.parse(saved) as UserProfile;
+      return parsed && typeof parsed.id === 'string' ? parsed : null;
+    } catch {
+      return null;
+    }
   },
 
   isOnboardingDone(): boolean {

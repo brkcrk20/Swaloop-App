@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { messageService } from '../../services/messageService';
 import { Conversation, Message } from '../../types';
 import {
@@ -19,7 +19,8 @@ import {
 export const MessagesPage: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoadingConvs, setIsLoadingConvs] = useState(true);

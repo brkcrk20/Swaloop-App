@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { communityService } from '../../services/communityService';
 import { CommunityPost, CommunityEvent } from '../../types';
 import {
@@ -20,7 +20,8 @@ import {
 
 export const CommunityPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, showToast } = useApp();
+  const { showToast } = useApp();
+  const currentUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<'stories' | 'events' | 'leaderboard'>('stories');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);

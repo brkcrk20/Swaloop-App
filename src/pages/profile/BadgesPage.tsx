@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, useAuthUser } from '../../context/AppContext';
 import { INITIAL_BADGES } from '../../constants';
 import { Badge } from '../../types';
 import {
@@ -18,7 +18,7 @@ import {
 
 export const BadgesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser } = useApp();
+  const currentUser = useAuthUser();
   const [filterCategory, setFilterCategory] = useState<'all' | 'unlocked' | 'locked'>('all');
 
   // List of badges from mockup and constants

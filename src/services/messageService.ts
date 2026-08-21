@@ -49,8 +49,16 @@ type MessageRow = {
   sender?: any;
 };
 
+// Profil join'lerinde `profiles(*)` kullanılmıyor: o satır `phone` kolonunu da
+// içeriyor ve `*` ile çekildiğinde başka kullanıcıların telefon numarası
+// istemciye iniyordu. RLS satır bazlıdır, kolon bazlı değildir — bu yüzden
+// hangi kolonların istendiği burada açıkça sınırlanıyor.
+const PROFILE_COLS = 'id, full_name, avatar_url, city, district, bio, created_at';
+
 const CONVERSATION_SELECT =
-  '*, participant_one:profiles!conversations_participant_one_id_fkey(*), participant_two:profiles!conversations_participant_two_id_fkey(*)';
+  `*, participant_one:profiles!conversations_participant_one_id_fkey(${PROFILE_COLS}), participant_two:profiles!conversations_participant_two_id_fkey(${PROFILE_COLS})`;
+
+const MESSAGE_SELECT = `*, sender:profiles(${PROFILE_COLS})`;
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -79,7 +87,7 @@ async function mapConversationRow(row: ConversationRow, currentUserId: string): 
 
   const { data: lastMsgRow } = await supabase
     .from('messages')
-    .select('*, sender:profiles(*)')
+    .select(MESSAGE_SELECT)
     .eq('conversation_id', row.id)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -149,7 +157,7 @@ export const messageService = {
   async getMessages(conversationId: string): Promise<Message[]> {
     const { data, error } = await supabase
       .from('messages')
-      .select('*, sender:profiles(*)')
+      .select(MESSAGE_SELECT)
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
@@ -180,7 +188,7 @@ export const messageService = {
     const { data, error } = await supabase
       .from('messages')
       .insert(insertPayload)
-      .select('*, sender:profiles(*)')
+      .select(MESSAGE_SELECT)
       .single();
 
     if (error || !data) {

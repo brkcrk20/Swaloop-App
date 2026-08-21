@@ -6,7 +6,7 @@ import { useApp } from '../../context/AppContext';
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, t } = useApp();
+  const { t } = useApp();
 
   const isAuthPage =
     location.pathname === '/' ||

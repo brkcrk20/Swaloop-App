@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile, Listing, TradeOffer, NotificationItem } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { UserProfile, NotificationItem } from '../types';
 import { authService } from '../services/authService';
 import { listingService } from '../services/listingService';
-import { tradeService } from '../services/tradeService';
+import { supabase } from '../lib/supabase';
 import { INITIAL_NOTIFICATIONS } from '../data/mockData';
 import { Language, TranslationKey, getTranslation } from '../utils/translations';
 
@@ -14,8 +14,17 @@ interface ToastMessage {
 }
 
 interface AppContextType {
-  currentUser: UserProfile;
-  setCurrentUser: React.Dispatch<React.SetStateAction<UserProfile>>;
+  /**
+   * Giriş yapmış kullanıcı, ya da giriş yapılmadıysa `null`.
+   *
+   * Korumalı sayfalarda bunun yerine `useAuthUser()` kullanın: o hook
+   * `<RequireAuth>` altında çalıştığı için null olmayan bir profil döndürür ve
+   * her sayfada tekrar null kontrolü yazmanızı gerektirmez.
+   */
+  currentUser: UserProfile | null;
+  setCurrentUser: (user: UserProfile | null) => void;
+  /** Supabase oturumu ilk kez doğrulanana kadar `true`. */
+  isAuthLoading: boolean;
   currentLocation: { city: string; district: string };
   setCurrentLocation: (loc: { city: string; district: string }) => void;
   notifications: NotificationItem[];
@@ -39,7 +48,15 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(authService.getCurrentUser());
+  // Önbellekteki profil yalnızca ilk boyama için bir ipucu; gerçek kaynak
+  // aşağıdaki useEffect içinde Supabase oturumundan doğrulanır. Önceden burada
+  // oturum yoksa mock CURRENT_USER kullanılıyordu ve giriş yapmamış ziyaretçi
+  // uygulamada başkası olarak oturum açmış görünüyordu.
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() =>
+    authService.getCachedUser()
+  );
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
   const [currentLocation, setCurrentLocation] = useState({ city: 'İstanbul', district: 'Kadıköy' });
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -51,6 +68,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (localStorage.getItem('swaloop_theme') as 'light' | 'dark') || 'light';
   });
 
+  const setCurrentUser = useCallback((user: UserProfile | null) => {
+    setCurrentUserState(user);
+  }, []);
+
+  const [favoritesCount, setFavoritesCount] = useState<number>(0);
+
+  const refreshFavoritesCount = useCallback(() => {
+    listingService.getFavorites().then((favs) => setFavoritesCount(favs.length));
+  }, []);
+
+  // ── Oturum başlangıcı ve takibi ─────────────────────────────────────────
+  // Bu blok önceden hiç yoktu: getCurrentUserFromSupabase() ve
+  // onAuthStateChange() projede hiçbir yerden çağrılmıyordu, yani uygulama
+  // gerçek Supabase oturumundan tamamen habersizdi.
+  useEffect(() => {
+    let cancelled = false;
+
+    authService
+      .getCurrentUserFromSupabase()
+      .then((user) => {
+        if (cancelled) return;
+        setCurrentUserState(user);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Oturum doğrulanamadı:', error);
+        setCurrentUserState(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsAuthLoading(false);
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setCurrentUserState(null);
+        setFavoritesCount(0);
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        authService.getCurrentUserFromSupabase().then((user) => {
+          setCurrentUserState(user);
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -58,6 +129,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Favoriler yalnızca giriş yapılmışken okunabilir (RLS: favorites tablosu
+  // satır sahibine kapalı). Oturum değiştikçe sayacı yeniliyoruz.
+  useEffect(() => {
+    if (!currentUser) {
+      setFavoritesCount(0);
+      return;
+    }
+    refreshFavoritesCount();
+  }, [currentUser, refreshFavoritesCount]);
 
   const setLanguage = (lang: 'tr' | 'en') => {
     setLanguageState(lang);
@@ -76,38 +157,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
 
-  const [favoritesCount, setFavoritesCount] = useState<number>(0);
-
-  const refreshFavoritesCount = () => {
-    listingService.getFavorites().then((favs) => setFavoritesCount(favs.length));
-  };
-
-  useEffect(() => {
-    refreshFavoritesCount();
-  }, []);
-
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
   };
 
-  const showToast = (title: string, description?: string, type: ToastMessage['type'] = 'success') => {
-    const id = `toast-${Date.now()}-${Math.random()}`;
-    const newToast: ToastMessage = { id, title, description, type };
-    setToasts((prev) => [...prev, newToast]);
-    setTimeout(() => {
-      removeToast(id);
-    }, 4000);
-  };
-
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
-  const refreshUserData = () => {
-    setCurrentUser(authService.getCurrentUser());
-  };
+  const showToast = useCallback(
+    (title: string, description?: string, type: ToastMessage['type'] = 'success') => {
+      const id = `toast-${Date.now()}-${Math.random()}`;
+      const newToast: ToastMessage = { id, title, description, type };
+      setToasts((prev) => [...prev, newToast]);
+      setTimeout(() => {
+        removeToast(id);
+      }, 4000);
+    },
+    [removeToast]
+  );
+
+  const refreshUserData = useCallback(() => {
+    authService.getCurrentUserFromSupabase().then((user) => {
+      setCurrentUserState(user);
+    });
+  }, []);
 
   const t = (key: TranslationKey): string => {
     return getTranslation(key, language);
@@ -118,6 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentUser,
         setCurrentUser,
+        isAuthLoading,
         currentLocation,
         setCurrentLocation,
         notifications,
@@ -149,4 +226,24 @@ export const useApp = () => {
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;
+};
+
+/**
+ * Korumalı sayfalar için: null olmayan kullanıcıyı döndürür.
+ *
+ * `<RequireAuth>` altında render edilen her bileşen bunu güvenle
+ * kullanabilir — oturum yoksa o sayfa zaten hiç render edilmez ve kullanıcı
+ * giriş ekranına yönlendirilir. Bu hook sayesinde 40'tan fazla noktada
+ * `currentUser?.id` / `currentUser!` yazmak gerekmiyor.
+ */
+export const useAuthUser = (): UserProfile => {
+  const { currentUser } = useApp();
+
+  if (!currentUser) {
+    throw new Error(
+      'useAuthUser yalnızca <RequireAuth> ile korunan sayfalarda kullanılabilir.'
+    );
+  }
+
+  return currentUser;
 };

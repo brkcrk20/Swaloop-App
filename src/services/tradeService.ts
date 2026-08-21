@@ -3,7 +3,7 @@ import { impactService } from './impactService';
 import { supabase } from '../lib/supabase';
 import { mapProfile } from './authService';
 import { enrichListings } from './listingService';
-import type { TablesInsert, TablesUpdate } from '../types/supabase';
+import type { Json, TablesInsert } from '../types/supabase';
 
 // ─────────────────────────────────────────────────────────────────────────
 // NOT: Bu dosya artık mockData yerine gerçek Supabase sorguları kullanıyor.
@@ -67,8 +67,13 @@ type TradeEventRow = {
   created_at: string;
 };
 
+// Profil join'lerinde `profiles(*)` KULLANILMIYOR: o satır `phone` kolonunu da
+// içeriyor ve `*` ile çekildiğinde karşı tarafın telefon numarası istemciye
+// iniyordu. mapProfile() eksik alanlar için zaten güvenli varsayılanlar üretir.
+const PROFILE_COLS = 'id, full_name, avatar_url, city, district, bio, created_at';
+
 const OFFER_SELECT =
-  '*, sender:profiles!trade_offers_sender_id_fkey(*), receiver:profiles!trade_offers_receiver_id_fkey(*), items:trade_offer_items(*, listing:listings(*, user:profiles(*), images:listing_images(storage_path)))';
+  `*, sender:profiles!trade_offers_sender_id_fkey(${PROFILE_COLS}), receiver:profiles!trade_offers_receiver_id_fkey(${PROFILE_COLS}), items:trade_offer_items(*, listing:listings(*, user:profiles(${PROFILE_COLS}), images:listing_images(storage_path)))`;
 
 function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return 'Bekleniyor';
@@ -359,118 +364,59 @@ export const tradeService = {
       locationName?: string;
       notes?: string;
     };
+    parentOfferId?: string;
   }): Promise<TradeOffer | undefined> {
-    const insertPayload: TablesInsert<'trade_offers'> = {
-      sender_id: data.initiator.id,
-      receiver_id: data.receiver.id,
-      status: 'offer_sent',
-      message: data.note ?? null,
-    };
+    // Teklif + kalemleri artık tek bir transaction içinde, veritabanı
+    // tarafında oluşturuluyor. Önceden bunlar iki ayrı istemci INSERT'iydi;
+    // ikincisi başarısız olursa yetim bir teklif satırı kalıyordu (elle
+    // silmeye çalışılıyordu ama o silme de başarısız olabilirdi).
+    //
+    // RPC ayrıca istemcinin yapamadığı doğrulamayı yapıyor: teklif edilen
+    // ilanlar gerçekten gönderene, istenen ilanlar gerçekten alıcıya ait mi?
+    const { data: offerId, error } = await supabase.rpc('create_trade_offer', {
+      p_receiver_id: data.receiver.id,
+      p_offered_listing_ids: data.offeredListings.map((l) => l.id),
+      p_requested_listing_ids: data.requestedListings.map((l) => l.id),
+      p_message: data.note ?? null,
+      p_delivery_method: data.deliveryMethod,
+      p_parent_offer_id: data.parentOfferId ?? null,
+    });
 
-    const { data: offerRow, error: offerError } = await supabase
-      .from('trade_offers')
-      .insert(insertPayload)
-      .select()
-      .single();
-
-    if (offerError || !offerRow) {
-      console.error('Teklif oluşturulamadı:', offerError);
+    if (error || !offerId) {
+      console.error('Teklif oluşturulamadı:', error);
       return undefined;
     }
 
-    const itemRows: TablesInsert<'trade_offer_items'>[] = [
-      ...data.offeredListings.map((l) => ({
-        offer_id: offerRow.id,
-        listing_id: l.id,
-        owner_id: data.initiator.id,
-        role: 'offered',
-      })),
-      ...data.requestedListings.map((l) => ({
-        offer_id: offerRow.id,
-        listing_id: l.id,
-        owner_id: data.receiver.id,
-        role: 'requested',
-      })),
-    ];
-
-    const { error: itemsError } = await supabase
-      .from('trade_offer_items')
-      .insert(itemRows);
-
-    if (itemsError) {
-      console.error('Teklif kalemleri oluşturulamadı:', itemsError);
-      // Teklif satırı yetim kalmasın diye geri alınıyor.
-      await supabase.from('trade_offers').delete().eq('id', offerRow.id);
-      return undefined;
-    }
-
-    // NOT: deliveryMethod/deliveryDetails burada henüz kaydedilmiyor —
-    // DB'de bu bilgiler `trades` tablosunda tutuluyor ve `trades` satırı
-    // ancak teklif KABUL EDİLİNCE (acceptOffer) oluşuyor. Kullanıcının
-    // teklif ekranında seçtiği teslimat tercihi şimdilik hiçbir yere
-    // kaydedilmiyor; ileride ya `trade_offers`'a bir kolon eklenip
-    // taşınmalı ya da acceptOffer sırasında receiver'ın teslimat
-    // tercihiyle birleştirilmeli. Bu, yeni oturumda netleştirilmesi
-    // gereken bir karar.
-
-    return this.getTradeById(offerRow.id);
+    return this.getTradeById(offerId as string);
   },
 
   async acceptOffer(tradeId: string): Promise<TradeOffer | undefined> {
-    const { data: offerRow, error: offerError } = await supabase
-      .from('trade_offers')
-      .select('*')
-      .eq('id', tradeId)
-      .maybeSingle();
+    // Yetki kontrolü ve atomiklik veritabanına taşındı:
+    //  · Teklifi yalnızca ALICISI kabul edebilir (önceden hiç kontrol yoktu,
+    //    teklif kimliğini bilen herkes başkasının takasını kabul edebiliyordu).
+    //  · Teklif güncellemesi + trades satırı + olay kaydı tek transaction.
+    //    Önceden ikinci adım patlarsa teklif "kabul edildi ama takası yok"
+    //    durumunda kilitleniyordu.
+    const { error } = await supabase.rpc('accept_trade_offer', {
+      p_offer_id: tradeId,
+    });
 
-    if (offerError || !offerRow) {
-      console.error('Teklif bulunamadı:', offerError);
+    if (error) {
+      console.error('Teklif kabul edilemedi:', error);
       return undefined;
     }
-
-    const { error: updateError } = await supabase
-      .from('trade_offers')
-      .update({ status: 'accepted' })
-      .eq('id', tradeId);
-
-    if (updateError) {
-      console.error('Teklif durumu güncellenemedi:', updateError);
-      return undefined;
-    }
-
-    const tradeInsert: TablesInsert<'trades'> = {
-      offer_id: offerRow.id,
-      sender_id: offerRow.sender_id,
-      receiver_id: offerRow.receiver_id,
-      status: 'locked',
-    };
-
-    const { data: tradeRow, error: tradeError } = await supabase
-      .from('trades')
-      .insert(tradeInsert)
-      .select()
-      .single();
-
-    if (tradeError || !tradeRow) {
-      console.error('Trade kaydı oluşturulamadı:', tradeError);
-      return undefined;
-    }
-
-    await supabase.from('trade_events').insert({
-      trade_id: tradeRow.id,
-      actor_id: offerRow.receiver_id,
-      event_type: 'offer_accepted',
-      note: 'Teklif kabul edildi, ürünler kilitlendi.',
-    } as TablesInsert<'trade_events'>);
 
     return this.getTradeById(tradeId);
   },
 
   async rejectOffer(tradeId: string, reason?: string): Promise<TradeOffer | undefined> {
-    const { error } = await supabase
-      .from('trade_offers')
-      .update({ status: 'rejected', message: reason })
-      .eq('id', tradeId);
+    // Gerekçe artık `message` kolonuna DEĞİL, `rejection_reason` kolonuna
+    // yazılıyor — önceden teklifi gönderenin orijinal notunun üzerine
+    // yazılıyor ve o not kalıcı olarak kayboluyordu.
+    const { error } = await supabase.rpc('reject_trade_offer', {
+      p_offer_id: tradeId,
+      p_reason: reason ?? null,
+    });
 
     if (error) {
       console.error('Teklif reddedilemedi:', error);
@@ -490,11 +436,22 @@ export const tradeService = {
     const orig = await this.getTradeById(originalTradeId);
     if (!orig) return undefined;
 
-    await supabase
-      .from('trade_offers')
-      .update({ status: 'counter_offered' })
-      .eq('id', originalTradeId);
+    // Orijinal teklifin durumunu değiştirmek yetki gerektiriyor: bunu yalnızca
+    // teklifin alıcısı yapabilir. Önceden istemciden doğrudan UPDATE
+    // atılıyordu, yani teklifin tarafı olmayan biri de başkasının teklifini
+    // 'counter_offered' durumuna taşıyabiliyordu.
+    const { error: markError } = await supabase.rpc('mark_offer_countered', {
+      p_original_offer_id: originalTradeId,
+    });
 
+    if (markError) {
+      console.error('Karşı teklif verilemedi:', markError);
+      return undefined;
+    }
+
+    // parent_offer_id artık teklif oluşturulurken atanıyor; önceden teklif
+    // oluşturulduktan SONRA ikinci bir UPDATE ile bağlanıyordu ve o update
+    // başarısız olursa karşı teklif orijinaline hiç bağlanmıyordu.
     const counterOffer = await this.createTradeOffer({
       initiator: orig.receiver,
       receiver: orig.initiator,
@@ -502,86 +459,41 @@ export const tradeService = {
       requestedListings: newRequestedListings,
       deliveryMethod: newDeliveryMethod,
       note: note || `Karşı teklif: ${orig.offeredListings[0]?.title ?? ''} yerine alternatif öneri.`,
+      parentOfferId: originalTradeId,
     });
 
     if (!counterOffer) return undefined;
 
-    await supabase
-      .from('trade_offers')
-      .update({ parent_offer_id: originalTradeId })
-      .eq('id', counterOffer.id);
-
-    return this.getTradeById(counterOffer.id);
+    return counterOffer;
   },
 
   async advanceTradeStep(tradeId: string, targetStep: 4 | 5 | 6): Promise<TradeOffer | undefined> {
-    const tradeRow = await fetchTradeRowByOfferId(tradeId);
-    if (!tradeRow) {
-      console.error('advanceTradeStep: bu teklife bağlı bir trade kaydı yok.');
-      return undefined;
-    }
-
-    let newStatus: string;
-    let eventType: string;
-    const update: TablesUpdate<'trades'> = {};
-
-    if (targetStep === 4) {
-      newStatus = 'delivery_planned';
-      eventType = 'delivery_planned';
-    } else if (targetStep === 5) {
-      newStatus = 'verified';
-      eventType = 'verified';
-    } else {
-      newStatus = 'completed';
-      eventType = 'completed';
-      update.completed_at = new Date().toISOString();
-    }
-
-    update.status = newStatus;
-
-    const { error: updateError } = await supabase
-      .from('trades')
-      .update(update)
-      .eq('id', tradeRow.id);
-
-    if (updateError) {
-      console.error('Trade durumu güncellenemedi:', updateError);
-      return undefined;
-    }
-
-    await supabase.from('trade_events').insert({
-      trade_id: tradeRow.id,
-      event_type: eventType,
-    } as TablesInsert<'trade_events'>);
+    // Adım ilerletme artık RPC üzerinden. Kazanımlar:
+    //  · Yalnızca takasın iki tarafından biri ilerletebilir (önceden hiç
+    //    kontrol yoktu).
+    //  · Adımlar atlanamaz ve geri alınamaz; durum sırası DB'de doğrulanıyor.
+    //  · Durum güncellemesi, olay kaydı ve etki kaydı tek transaction.
+    //  · trade_events.actor_id artık dolduruluyor (önceden 4/5/6. adımlarda
+    //    boş kalıyordu, yani "kim ilerletti" bilgisi kayboluyordu).
+    //
+    // Etki değerleri istemcide impactService (LCA katsayı tablosu) ile
+    // hesaplanıp gönderiliyor; katsayı tablosunu SQL'e kopyalamamak için.
+    let impact: Json | null = null;
 
     if (targetStep === 6) {
       const offer = await this.getTradeById(tradeId);
-      if (offer) {
-        // DÜZELTİLDİ (6. tur): src/types/supabase.ts'teki gerçek şemaya göre
-        // kolon adları `material_kg` / `waste_kg` (önceden yanlışlıkla
-        // `raw_material_kg` / `waste_reduction_kg` kullanılıyordu — bu, `as
-        // TablesInsert<'impact_records'>` cast'i tip kontrolünü bastırdığı
-        // için tsc tarafından hiç yakalanmamıştı, gerçek DB'de "column does
-        // not exist" hatası verirdi).
-        const impactInsert: TablesInsert<'impact_records'> = {
-          trade_id: tradeRow.id,
-          co2e_kg: offer.combinedImpact.co2eKg,
-          water_liters: offer.combinedImpact.waterLiters,
-          energy_kwh: offer.combinedImpact.energyKwh,
-          material_kg: offer.combinedImpact.rawMaterialKg,
-          waste_kg: offer.combinedImpact.wasteReductionKg,
-          reuse_count: offer.combinedImpact.reuseCount,
-          methodology_version: offer.combinedImpact.methodologyVersion,
-        };
+      impact = offer ? ({ ...offer.combinedImpact } as unknown as Json) : null;
+    }
 
-        const { error: impactError } = await supabase
-          .from('impact_records')
-          .insert(impactInsert);
+    const { error } = await supabase.rpc('advance_trade', {
+      p_offer_id: tradeId,
+      p_target_step: targetStep,
+      p_impact: impact,
+    });
 
-        if (impactError) {
-          console.error('Etki kaydı oluşturulamadı:', impactError);
-        }
-      }
+    if (error) {
+      console.error('Takas adımı ilerletilemedi:', error);
+      return undefined;
     }
 
     return this.getTradeById(tradeId);
@@ -641,7 +553,7 @@ export const tradeService = {
   async getReviewsForUser(userId: string): Promise<Review[]> {
     const { data, error } = await supabase
       .from('reviews')
-      .select('*, reviewer:profiles!reviews_reviewer_id_fkey(*)')
+      .select(`*, reviewer:profiles!reviews_reviewer_id_fkey(${PROFILE_COLS})`)
       .eq('reviewed_user_id', userId)
       .order('created_at', { ascending: false });
 
